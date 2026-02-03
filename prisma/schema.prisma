@@ -1,0 +1,728 @@
+generator client { 
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id                  String              @id @default(uuid())
+  email               String              @unique
+  name                String
+  foto                String? 
+  password            String?
+  googleId            String?  @unique
+  refreshToken        String?
+  cargo               String?  
+  perfil              String
+  active              Boolean             @default(false)
+  primeiroAcesso      Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  confirmed           Boolean  @default(false)    // ← novo campo
+  confirmToken        String? 
+
+  // Aceite de termos de uso
+  termsAccepted       Boolean  @default(false)    // Se o usuário aceitou os termos
+  termsAcceptedAt     DateTime?                   // Data de aceite dos termos
+
+  // Campos relacionados ao plano
+  currentPlan         String?             // Nome do plano atual
+  billingCycle        String?             // 'mensal' | 'anual'
+  planActivatedAt     DateTime?           // Data de ativação do plano
+  planExpiresAt       DateTime?           // Data de expiração do plano
+
+  compoundInterests CompoundInterest[]
+  financialIndependence    FinancialIndependence[]
+  spendingPlan      SpendingPlan[]
+  technicalIndicators TechnicalIndicator[]
+  paymentTransactions PaymentTransaction[]
+  pixTransactions   PixTransaction[]
+  planHistory       PlanHistory[]
+  trades            Trade[]              // Relação com trades
+  pendingOrders     PendingOrder[]       // Relação com ordens pendentes
+  wallets           Wallet[]             // Relação com carteiras
+  userChallengeStats UserChallengeStats[]
+  challengesAsChallenger Challenge[] @relation("Challenger")
+  challengesAsChallenged Challenge[] @relation("Challenged")
+  challengesWon     Challenge[] @relation("Winner")
+  challengesLost    Challenge[] @relation("Loser")
+  challengeTrades   ChallengeTrade[]
+  tokenTransactions TokenTransaction[]
+  bots             Bot[]
+  chatMessages     ChatMessage[]
+  testerRequests   TesterRequest[]
+  bitcoinTransactions BitcoinTransaction[]
+  expenseTypes     ExpenseType[]
+  backtests        Backtest[]
+  
+}
+
+enum RatePeriod {
+  ANUAL
+  MENSAL
+}
+
+enum TermUnit {
+  ANOS
+  MESES
+}
+
+// --------------- Modelo ---------------
+model CompoundInterest {
+  id                String     @id @default(uuid())
+  userId            String
+  user              User       @relation(fields: [userId], references: [id])
+
+  // Entradas de cálculo
+  initial           Float?
+  rate              Float?
+  ratePeriod        RatePeriod?
+  term              Int?
+  termUnit          TermUnit?
+  monthly           Float?
+
+  // Derivados
+  totalMonths       Int?
+  interestPerMonth  Float?
+  montantePrincipal Float?
+  tax               Float?
+  total             Float?  
+  taxValue          Float?     @default(0)    // valor do imposto em R$
+  netValue          Float ?    @default(0)    // valor líquido após imposto
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model FinancialIndependence {
+  id                 String   @id @default(uuid())
+  user               User     @relation(fields: [userId], references: [id])
+  userId             String   
+
+  /* parâmetros de entrada */
+  initial            Decimal
+  rate               Decimal            // % a.a. ou % a.m.
+  ratePeriod         String             // 'ANUAL' | 'MENSAL'
+  term               Int
+  termUnit           String             // 'ANOS' | 'MESES'
+  monthly            Decimal            // aporte mensal normalizado
+
+  /* derivados */
+  totalMonths        Int
+  interestPerMonth   Decimal
+  montantePrincipal  Decimal
+  tax                Decimal            // alíquota %
+  total              Decimal            // montante bruto
+  taxValue           Decimal            // imposto em R$
+  netValue           Decimal            // montante líquido
+  safeWithdraw       Decimal            // saque mensal sustentável
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+/// one "SpendingPlan" per user, storing both receitas & despesas as JSON
+model SpendingPlan {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  receitas        Json     // array of { id, description, value, expenseType, ... } - PLANEJADAS
+  despesas        Json     // array of { id, description, value, expenseType, ... } - PLANEJADAS
+  receitasReais   Json?    // array of { id, description, value, expenseType, ... } - REALIZADAS
+  despesasReais   Json?    // array of { id, description, value, expenseType, ... } - REALIZADAS
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("SpendingPlan")
+}
+
+// Configurações de indicadores técnicos por usuário
+model TechnicalIndicator {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  // Tipo do indicador
+  type      String   // 'moving_average', 'bollinger_bands', 'macd', etc.
+  
+  // Configurações específicas do indicador (JSON)
+  config    Json
+  
+  // Ordem de exibição
+  order     Int      @default(0)
+  
+  // Ativo ou não
+  active    Boolean  @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type, order])
+  @@map("TechnicalIndicator")
+}
+
+// Transações de pagamento com cartão
+model PaymentTransaction {
+  id                    String   @id @default(uuid())
+  userId                String?
+  user                  User?    @relation(fields: [userId], references: [id])
+  
+  stripePaymentIntentId String   @unique
+  amount                Float
+  plan                  String
+  billingCycle          String   // 'mensal' | 'anual'
+  status                String   // 'pending', 'processing', 'completed', 'failed', 'cancelled'
+  metadata              Json?    // Dados adicionais da transação
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("PaymentTransaction")
+}
+
+// Transações de pagamento PIX
+model PixTransaction {
+  id                    String    @id @default(uuid())
+  userId                String?
+  user                  User?     @relation(fields: [userId], references: [id])
+  
+  stripePaymentIntentId String    @unique
+  amount                Float
+  plan                  String
+  billingCycle          String    // 'mensal' | 'anual'
+  status                String    // 'pending', 'processing', 'completed', 'failed', 'cancelled', 'expired'
+  pixCode               String?   // Código PIX gerado
+  expiresAt             DateTime? // Data de expiração do PIX
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("PixTransaction")
+}
+
+// Histórico de mudanças de plano
+model PlanHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  
+  planName     String
+  oldPlan      String?  // Plano anterior (para upgrades/downgrades)
+  changeType   String   // 'new', 'upgrade', 'downgrade', 'cancelled'
+  price        Float
+  billingCycle String   // 'mensal' | 'anual'
+  date         DateTime @default(now())
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("PlanHistory")
+}
+
+// Histórico de trades dos usuários
+model Trade {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Informações básicas do trade
+  symbol          String   // Par de trading (ex: BTCUSDT)
+  side            String   // 'buy' | 'sell'
+  type            String   // 'market' | 'limit' | 'stop'
+  quantity        Float    // Quantidade negociada
+  price           Float    // Preço de execução
+  total           Float    // Valor total (quantity * price)
+  
+  // Identificação do tipo de trade
+  tradeType       String   // 'manual' | 'automated' | 'bot'
+  environment     String   // 'real' | 'simulated' | 'paper'
+  
+  // Informações do bot (se aplicável)
+  botId           String?  // ID do bot que executou o trade
+  bot             Bot?     @relation(fields: [botId], references: [id])
+  botName         String?  // Nome do bot
+  
+  // Resultado do trade
+  pnl             Float?   // Profit/Loss
+  pnlPercent      Float?   // Profit/Loss percentual
+  status          String   // 'open' | 'closed' | 'cancelled'
+  
+  // Timestamps
+  entryTime       DateTime @default(now())
+  exitTime        DateTime? // Quando o trade foi fechado
+  
+  // Metadados
+  stopLoss        Float?   // Stop loss definido
+  takeProfit      Float?   // Take profit definido
+  fees            Float?   // Taxas pagas
+  exitPrice       Float?   // Preço de encerramento da posição
+  notes           String?  // Observações do usuário
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("Trade")
+}
+
+// Ordens pendentes dos usuários
+model PendingOrder {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Informações básicas da ordem
+  symbol          String   // Par de trading (ex: BTCUSDT)
+  side            String   // 'buy' | 'sell'
+  type            String   // 'limit' | 'market'
+  quantity        Float    // Quantidade da ordem
+  price           Float    // Preço da ordem
+  total           Float    // Valor total (quantity * price)
+  
+  // Status da ordem
+  status          String   // 'pending' | 'filled' | 'cancelled'
+  
+  // Configurações opcionais
+  takeProfit      Float?   // Take profit definido
+  stopLoss        Float?   // Stop loss definido
+  
+  // Metadados
+  notes           String?  // Observações do usuário
+  environment     String   @default("simulated") // 'real' | 'simulated' | 'paper'
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("PendingOrder")
+}
+
+// Carteiras dos usuários (virtual e real)
+model Wallet {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Tipo da carteira
+  type            String   // 'virtual' | 'real'
+  
+  // Informações do ativo
+  symbol          String   // 'USD', 'BTC', 'ETH', etc.
+  name            String   // Nome do ativo
+  
+  // Saldos
+  balance         Float    @default(0)  // Quantidade do ativo
+  value           Float    @default(0)  // Valor em USD
+  
+  // Configurações
+  isActive        Boolean  @default(true)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, type, symbol])
+  @@map("Wallet")
+}
+
+// Estatísticas dos usuários no sistema de desafios
+model UserChallengeStats {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Dados fictícios para o sistema de desafios
+  tokens          Float    @default(1000)  // Tokens disponíveis para apostas
+  totalWins       Int      @default(0)     // Total de vitórias em desafios
+  totalLosses     Int      @default(0)     // Total de derrotas em desafios
+  winRate         Float    @default(0)     // Percentual de vitórias
+  totalProfit     Float    @default(0)     // Lucro total em tokens
+  totalChallenges Int      @default(0)     // Total de desafios participados
+  activeChallenges Int     @default(0)     // Desafios ativos no momento
+  
+  // Rankings e conquistas
+  rank            Int?     // Ranking atual na plataforma
+  bestWinStreak   Int      @default(0)     // Maior sequência de vitórias
+  currentStreak   Int      @default(0)     // Sequência atual (positiva ou negativa)
+  
+  // Estatísticas detalhadas
+  averageReturn   Float    @default(0)     // Retorno médio por desafio
+  bestReturn      Float    @default(0)     // Melhor retorno em um desafio
+  worstReturn     Float    @default(0)     // Pior retorno em um desafio
+  
+  // Configurações
+  autoAccept      Boolean  @default(false) // Aceitar desafios automaticamente
+  minBetAmount    Float    @default(10)    // Aposta mínima aceita
+  maxBetAmount    Float    @default(500)   // Aposta máxima aceita
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("UserChallengeStats")
+}
+
+// Desafios entre usuários
+model Challenge {
+  id                String   @id @default(uuid())
+  
+  // Informações básicas
+  title             String
+  description       String
+  type              String   // 'manual_trading' | 'bot_duel'
+  status            String   // 'pending' | 'waiting_start' | 'active' | 'completed' | 'cancelled'
+  
+  // Participantes
+  challengerId      String
+  challenger        User     @relation("Challenger", fields: [challengerId], references: [id])
+  challengedId      String
+  challenged        User     @relation("Challenged", fields: [challengedId], references: [id])
+  
+  // Configurações do desafio
+  duration          Float    // Duração em dias
+  betAmount         Float    // Aposta em tokens por jogador
+  initialBalance    Float    @default(1000) // Saldo inicial fictício
+  
+  // Horários
+  startDate         DateTime
+  endDate           DateTime
+  startTime         String   // Horário de início (HH:mm)
+  endTime           String   // Horário de término (HH:mm)
+  
+  // Robôs (para duelos de bots)
+  challengerBotId   String?
+  challengedBotId   String?
+  
+  // Resultados
+  winnerId          String?
+  winner            User?    @relation("Winner", fields: [winnerId], references: [id])
+  loserId           String?
+  loser             User?    @relation("Loser", fields: [loserId], references: [id])
+  
+  challengerProfit  Float?   // Lucro do desafiante
+  challengedProfit  Float?   // Lucro do desafiado
+  challengerReturn  Float?   // Retorno percentual do desafiante
+  challengedReturn  Float?   // Retorno percentual do desafiado
+  
+  // Saldos atuais (durante o desafio)
+  challengerCurrentBalance Float? @default(1000)
+  challengedCurrentBalance  Float? @default(1000)
+  challengerCurrentReturn   Float? @default(0)
+  challengedCurrentReturn   Float? @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relações com trades
+  challengeTrades   ChallengeTrade[]
+  tokenTransactions TokenTransaction[]
+
+  @@map("Challenge")
+}
+
+// Trades realizados durante desafios
+model ChallengeTrade {
+  id              String   @id @default(uuid())
+  challengeId     String
+  challenge       Challenge @relation(fields: [challengeId], references: [id])
+  
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Informações do trade
+  symbol          String
+  side            String   // 'buy' | 'sell'
+  quantity        Float
+  price           Float
+  timestamp       DateTime @default(now())
+  profit          Float?   // Lucro/prejuízo do trade
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("ChallengeTrade")
+}
+
+// Robôs de Trading
+model Bot {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  
+  // Configurações básicas
+  name              String
+  environment       String   // 'real' | 'virtual'
+  symbol            String
+  timeframe         String   @default("1h") // Tempo gráfico (ex: '1m', '5m', '15m', '1h', '4h', '1d')
+  isActive          Boolean  @default(false)
+  startDate         DateTime
+  
+  // Modo de operação
+  operationMode     String   // 'immediate' | 'scheduled'
+  operationTime     Json?    // { startTime: string, endTime: string, daysOfWeek: number[] }
+  
+  // Indicadores técnicos
+  primaryIndicator  String
+  secondaryIndicator String?
+  confirmationIndicator String?
+  indicators        Json?    // Array completo de indicadores com configurações
+  strategyId        String?  // ID da estratégia aplicada
+  strategyName      String?  // Nome da estratégia aplicada
+  
+  // Métodos de entrada e saída
+  entryType         String   // 'market' | 'limit' | 'stop'
+  entryCondition    String
+  entryValue        Float?
+  
+  exitType          String   // 'market' | 'limit' | 'stop'
+  exitCondition     String
+  exitValue         Float?
+  
+  // Gerenciamento de posição
+  positionSizingType String  // 'fixed' | 'percentage' | 'kelly'
+  positionSizingValue Float
+  maxPosition       Float
+  
+  // Saídas parciais
+  partialExitsEnabled Boolean @default(false)
+  partialExitsLevels Json?    // Array de { percentage: number, quantity: number }
+  
+  // Stop Loss e Take Profit
+  stopLossEnabled   Boolean  @default(false)
+  stopLossType      String   // 'fixed' | 'trailing' | 'atr'
+  stopLossValue     Float?
+  
+  takeProfitEnabled Boolean  @default(false)
+  takeProfitType    String   // 'trailing' | 'fixed' | 'atr'
+  takeProfitValue   Float?
+  
+  // Gerenciamento de risco
+  maxDailyLoss      Float
+  maxDrawdown       Float
+  maxOpenPositions  Int
+  
+  // Configurações avançadas
+  timeFilterEnabled Boolean  @default(false)
+  timeFilterStart   String?
+  timeFilterEnd     String?
+  
+  newsFilterEnabled Boolean  @default(false)
+  avoidNewsMinutes  Int      @default(30)
+  
+  correlationFilterEnabled Boolean @default(false)
+  maxCorrelation    Float    @default(0.7)
+  
+  // Modo de execução de entrada e saída
+  entryExecutionMode String? @default("candle_close") // 'candle_close' | 'price_condition'
+  exitExecutionMode  String? @default("candle_close") // 'candle_close' | 'price_condition'
+  
+  // Performance
+  totalTrades       Int      @default(0)
+  winningTrades     Int      @default(0)
+  losingTrades      Int      @default(0)
+  winRate           Float    @default(0)
+  totalProfit       Float    @default(0)
+  totalLoss         Float    @default(0)
+  netProfit         Float    @default(0)
+  sharpeRatio       Float    @default(0)
+  profitFactor      Float    @default(0)
+  averageWin        Float    @default(0)
+  averageLoss       Float    @default(0)
+  largestWin        Float    @default(0)
+  largestLoss       Float    @default(0)
+  consecutiveWins   Int      @default(0)
+  consecutiveLosses Int      @default(0)
+  currentStreak     Int      @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relações
+  trades            Trade[]
+  backtests         Backtest[]
+  
+  @@map("Bot")
+}
+
+// Histórico de transações de tokens
+model TokenTransaction {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Tipo de transação
+  type            String   // 'challenge_created' | 'challenge_accepted' | 'challenge_rejected' | 'challenge_won' | 'challenge_lost' | 'challenge_refund' | 'purchase' | 'sale'
+  
+  // Valor da transação
+  amount          Float    // Quantidade de tokens (positivo para ganhos, negativo para perdas)
+  
+  // Saldo após a transação
+  balanceAfter    Float    // Saldo de tokens após esta transação
+  
+  // Referência ao desafio (se aplicável)
+  challengeId     String?
+  challenge       Challenge? @relation(fields: [challengeId], references: [id])
+  
+  // Descrição da transação
+  description     String   // Descrição legível da transação
+  
+  // Metadados adicionais
+  metadata        Json?    // Dados adicionais (ex: nome do desafio, oponente, etc.)
+  
+  createdAt       DateTime @default(now())
+  
+  @@map("TokenTransaction")
+}
+
+// Mensagens do chat de suporte
+model ChatMessage {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Conteúdo da mensagem
+  text            String
+  
+  // Tipo de remetente
+  sender          String   // 'user' | 'support'
+  
+  // Status da mensagem
+  read            Boolean  @default(false) // Se foi lida pelo suporte
+  
+  createdAt       DateTime @default(now())
+  
+  @@map("ChatMessage")
+}
+
+// Solicitações de testadores para Super Créditos
+model TesterRequest {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Descrição do teste e problema identificado
+  description     String
+  
+  // Status da solicitação
+  status          String   @default("pending") // 'pending' | 'approved' | 'rejected'
+  
+  // Informações de aprovação
+  approvedAt      DateTime?
+  approvedBy      String?  // ID do admin que aprovou/rejeitou
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("TesterRequest")
+}
+
+// Configurações da plataforma (armazenadas como singleton)
+model PlatformSettings {
+  id                    String   @id @default("platform")
+  bitcoinWalletAddress  String?  // Endereço da carteira Bitcoin para pagamentos
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@map("PlatformSettings")
+}
+
+// Transações de compra de Super Créditos via Bitcoin
+model BitcoinTransaction {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Quantidade de Super Créditos
+  superCreditsAmount Int   // Quantidade de Super Créditos a serem creditados
+  
+  // Informações da transação Bitcoin
+  amountBTC       Float    // Quantidade de BTC enviada (0.00025 BTC por Super Crédito)
+  txHash          String?  // Hash da transação Bitcoin
+  walletAddress   String   // Endereço da carteira de destino
+  
+  // Status da transação
+  status          String   @default("pending") // 'pending' | 'approved' | 'rejected'
+  
+  // Informações de aprovação
+  approvedAt      DateTime?
+  approvedBy      String?  // ID do admin que aprovou/rejeitou
+  rejectionReason String?  // Motivo da rejeição, se aplicável
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("BitcoinTransaction")
+}
+
+// Tipos de gastos personalizados dos usuários
+model ExpenseType {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  name        String   // Nome do tipo (ex: Mercado, Carro, Lazer)
+  isDefault   Boolean  @default(false) // Para tipos padrão do sistema
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, name]) // Não permitir tipos duplicados por usuário
+  @@map("ExpenseType")
+}
+
+// Backtests salvos dos usuários
+model Backtest {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Configuração básica
+  name            String   // Nome do backteste
+  botId           String?  // ID do robô usado (opcional)
+  bot             Bot?     @relation(fields: [botId], references: [id])
+  
+  // Período de teste
+  startDate       DateTime // Data inicial do backtest
+  endDate         DateTime // Data final do backtest
+  startTime       String   @default("00:00") // Horário de início (HH:mm)
+  endTime         String   @default("23:59") // Horário de fim (HH:mm)
+  
+  // Configuração do ativo
+  symbol          String   // Par de trading (ex: BTCUSDT)
+  timeframe       String   // Timeframe (ex: 1h, 4h, 1d)
+  
+  // Configuração de capital
+  initialCapital  Float    // Capital inicial
+  commission      Float    @default(0.1) // Comissão em %
+  slippage        Float    @default(0.05) // Slippage em %
+  
+  // Configuração de estratégia (se não usar bot)
+  strategy        String?  // ID da estratégia
+  strategyConfig  Json?    // Configurações específicas da estratégia
+  
+  // Resultados do backtest
+  finalCapital    Float?   // Capital final
+  totalReturn     Float?   // Retorno total em %
+  totalTrades     Int      @default(0)
+  winningTrades   Int      @default(0)
+  losingTrades    Int      @default(0)
+  winRate         Float?   // Taxa de acerto em %
+  profitFactor    Float?   // Fator de lucro
+  maxDrawdown     Float?   // Drawdown máximo em %
+  sharpeRatio     Float?   // Sharpe Ratio
+  
+  // Dados detalhados
+  trades          Json?    // Array de trades executados
+  equityCurve     Json?    // Curva de equity
+  
+  // Status
+  status          String   @default("pending") // 'pending' | 'running' | 'completed' | 'error'
+  errorMessage    String?  // Mensagem de erro se falhou
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("Backtest")
+}
