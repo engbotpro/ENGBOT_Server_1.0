@@ -152,6 +152,11 @@ async function bootstrap() {
     app.use(passport.initialize());
 
     /* ─────────── Rotas ─────────── */
+    // Health check sem DB - Cloud Run precisa disso para passar no startup
+    app.get("/health", (_req: Request, res: Response) => {
+      res.status(200).json({ status: "ok" });
+    });
+
     app.get("/", (_req: Request, res: Response) => {
       
       res.send("Servidor Backend em TypeScript está rodando! 🚀");
@@ -176,13 +181,16 @@ async function bootstrap() {
   
 
     /* ─────────── Inicialização ─────────── */
-    await ensureAdminUser();
-    await ensureTokenTransactionTable();
-
+    // Escutar na porta PRIMEIRO (Cloud Run exige isso no timeout)
     server.listen(PORT, '0.0.0.0', () => {
-      console.log('dsds',PORT);
       console.log(`✅ API online: http://0.0.0.0:${PORT}`);
-      console.log(`✅ API acessível remotamente via IP da máquina na porta ${PORT}`);
+      // DB init em background para não bloquear o startup
+      Promise.all([
+        ensureAdminUser(),
+        ensureTokenTransactionTable(),
+      ]).catch((err) => {
+        console.error("❌ Erro na inicialização do banco:", err?.message || err);
+      });
     });
 
     // Iniciar serviço automático de trades para duelos de robôs

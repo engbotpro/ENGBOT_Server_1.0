@@ -46,7 +46,7 @@ COPY --from=builder /app/dist ./dist
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
-EXPOSE 5000
+EXPOSE 8080
 
-# Script de entrada: migração + start
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/app.js"]
+# Migração falha não bloqueia o start (Cloud Run precisa escutar na porta rapidamente)
+CMD ["sh", "-c", "(npx prisma migrate deploy || true) && node dist/app.js"]
