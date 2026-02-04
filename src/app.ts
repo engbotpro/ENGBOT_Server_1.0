@@ -134,15 +134,24 @@ async function bootstrap() {
             return callback(null, true);
           }
           
-          // Permitir origens configuradas no .env
-          const allowedOrigins = process.env.CORS_ORIGIN?.split(",") || [];
-          if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+          // Permitir origens configuradas no .env (trim para remover espaços)
+          const allowedOrigins = (process.env.CORS_ORIGIN || "")
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean);
+          if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+          }
+          // Permitir Vercel preview/deploy URLs (engbot-client-1-0*.vercel.app)
+          if (origin.endsWith(".vercel.app")) {
             return callback(null, true);
           }
           
           callback(new Error('Not allowed by CORS'));
         },
         credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"],
       })
     );
     app.use(express.json());
