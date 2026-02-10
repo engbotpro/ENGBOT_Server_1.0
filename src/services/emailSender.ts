@@ -11,16 +11,19 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function sendConfirmationEmail(email: string, token: string) {
-  const url = `${process.env.FRONTEND_URL}/confirm?token=${token}`;
+  const baseUrl = process.env.BACKEND_URL || process.env.API_URL || process.env.FRONTEND_URL || "http://localhost:5000";
+  const url = `${baseUrl}/auth/confirm?token=${encodeURIComponent(token)}`;
   await transporter.sendMail({
-    from: `"Seu App" <no-reply@seu-dominio.com>`,
+    from: process.env.SMTP_FROM || `"EngBot" <no-reply@engbot.com>`,
     to: email,
-    subject: "Confirme seu cadastro",
+    subject: "Confirme seu cadastro - EngBot",
     html: `
       <p>Olá!</p>
-      <p>Para ativar sua conta, clique no link abaixo:</p>
-      <a href="${url}">${url}</a>
-      <p>Esse link expira em 24h.</p>
+      <p>Para ativar sua conta no EngBot, clique no link abaixo:</p>
+      <p><a href="${url}" style="color:#39FF14;">Confirmar meu cadastro</a></p>
+      <p>Ou copie e cole no navegador:</p>
+      <p style="word-break:break-all;">${url}</p>
+      <p>Esse link expira em 24 horas.</p>
     `,
   });
 }

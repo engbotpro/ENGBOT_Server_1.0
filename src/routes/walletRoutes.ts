@@ -7,7 +7,8 @@ import {
   transferBalance,
   getWalletSummary,
   removeWalletAsset,
-  cleanupZeroBalances
+  cleanupZeroBalances,
+  executeVirtualSpotOrder,
 } from '../controllers/walletController';
 
 const router = express.Router();
@@ -38,6 +39,11 @@ router.put('/balance', async (req, res) => {
 // Transferir saldo entre ativos (compra/venda)
 router.post('/transfer', async (req, res) => {
   await transferBalance(req, res);
+});
+
+// Executar ordem spot virtual (compra/venda): atualiza carteira e salva no histórico de trades
+router.post('/execute-virtual-spot', async (req, res) => {
+  await executeVirtualSpotOrder(req, res);
 });
 
 // Remover ativo da carteira

@@ -482,6 +482,172 @@ export const removeWalletAsset = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Executa ordem spot virtual (compra ou venda): atualiza carteiras e registra trade no histórico.
+ * Body: { side, symbol, quantity, price, stopLoss?, takeProfit? }
+ */
+export const executeVirtualSpotOrder = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { side, symbol, quantity, price, stopLoss, takeProfit } = req.body;
+
+    if (!side || !symbol || !quantity || quantity <= 0 || !price || price <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Necessário: side (buy|sell), symbol (ex: BTCUSDT), quantity (>0), price (>0)',
+      });
+    }
+
+    const sideLower = String(side).toLowerCase();
+    if (sideLower !== 'buy' && sideLower !== 'sell') {
+      return res.status(400).json({
+        success: false,
+        message: 'side deve ser "buy" ou "sell"',
+      });
+    }
+
+    // symbol ex: BTCUSDT -> base = BTC, quote = USDT
+    const baseSymbol = symbol.replace(/USDT$/i, '');
+    const quoteSymbol = 'USDT';
+    const totalUsdt = quantity * price;
+
+    const usdtWallet = await prisma.wallet.findUnique({
+      where: {
+        userId_type_symbol: { userId, type: 'virtual', symbol: quoteSymbol },
+      },
+    });
+
+    const baseWallet = await prisma.wallet.findUnique({
+      where: {
+        userId_type_symbol: { userId, type: 'virtual', symbol: baseSymbol },
+      },
+    });
+
+    if (sideLower === 'buy') {
+      if (!usdtWallet || usdtWallet.balance < totalUsdt) {
+        return res.status(400).json({
+          success: false,
+          message: 'Saldo USDT insuficiente para compra',
+        });
+      }
+    } else {
+      const baseBalance = baseWallet?.balance ?? 0;
+      if (baseBalance < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Saldo insuficiente de ${baseSymbol}. Disponível: ${baseBalance.toFixed(8)}`,
+        });
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (sideLower === 'buy') {
+        await tx.wallet.update({
+          where: {
+            userId_type_symbol: { userId, type: 'virtual', symbol: quoteSymbol },
+          },
+          data: {
+            balance: usdtWallet!.balance - totalUsdt,
+            value: usdtWallet!.value - totalUsdt,
+          },
+        });
+        await tx.wallet.upsert({
+          where: {
+            userId_type_symbol: { userId, type: 'virtual', symbol: baseSymbol },
+          },
+          update: {
+            balance: { increment: quantity },
+            value: { increment: totalUsdt },
+          },
+          create: {
+            userId,
+            type: 'virtual',
+            symbol: baseSymbol,
+            name: baseSymbol,
+            balance: quantity,
+            value: totalUsdt,
+            isActive: true,
+          },
+        });
+      } else {
+        await tx.wallet.update({
+          where: {
+            userId_type_symbol: { userId, type: 'virtual', symbol: baseSymbol },
+          },
+          data: {
+            balance: baseWallet!.balance - quantity,
+            value: baseWallet!.value - totalUsdt,
+          },
+        });
+        await tx.wallet.upsert({
+          where: {
+            userId_type_symbol: { userId, type: 'virtual', symbol: quoteSymbol },
+          },
+          update: {
+            balance: { increment: totalUsdt },
+            value: { increment: totalUsdt },
+          },
+          create: {
+            userId,
+            type: 'virtual',
+            symbol: quoteSymbol,
+            name: 'Tether USD',
+            balance: totalUsdt,
+            value: totalUsdt,
+            isActive: true,
+          },
+        });
+      }
+
+      const trade = await tx.trade.create({
+        data: {
+          userId,
+          symbol,
+          side: sideLower,
+          type: 'market',
+          quantity,
+          price,
+          total: totalUsdt,
+          tradeType: 'manual',
+          environment: 'simulated',
+          status: 'closed',
+          entryTime: new Date(),
+          exitTime: new Date(),
+          exitPrice: price,
+          pnl: 0,
+          pnlPercent: 0,
+          stopLoss: stopLoss != null && stopLoss !== '' ? parseFloat(stopLoss) : null,
+          takeProfit: takeProfit != null && takeProfit !== '' ? parseFloat(takeProfit) : null,
+        },
+      });
+      (req as any).__createdTrade = trade;
+    });
+
+    const createdTrade = (req as any).__createdTrade;
+    await ensureMinimumVirtualBalance(userId);
+
+    const wallets = await prisma.wallet.findMany({
+      where: { userId, type: 'virtual', isActive: true },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: sideLower === 'buy' ? 'Compra virtual executada' : 'Venda virtual executada',
+      data: {
+        trade: createdTrade,
+        wallets,
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao executar ordem spot virtual:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    });
+  }
+};
+
 // Limpar ativos com saldo zero ou muito baixo
 export const cleanupZeroBalances = async (req: Request, res: Response) => {
   try {

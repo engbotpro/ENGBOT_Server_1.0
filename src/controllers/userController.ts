@@ -78,7 +78,24 @@ export const register = async (
   next: NextFunction
 ) => {
   try {
-    const { email, name, perfil, active, password } = req.body;
+    const body = req.body || {};
+    const email = (body.email || "").trim().toLowerCase();
+    const password = body.password;
+    const passwordConfirm = body.passwordConfirm ?? body.confirmPassword;
+    const name = (body.name || email.split("@")[0] || "Usuário").trim();
+
+    if (!email) {
+      return res.status(400).json({ error: "E-mail é obrigatório." });
+    }
+    if (!password || typeof password !== "string") {
+      return res.status(400).json({ error: "Senha é obrigatória." });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "A senha deve ter no mínimo 6 caracteres." });
+    }
+    if (passwordConfirm !== undefined && password !== passwordConfirm) {
+      return res.status(400).json({ error: "As senhas não coincidem." });
+    }
 
     // 0) Verifica se já existe
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -93,9 +110,9 @@ export const register = async (
         email,
         name,
         password: hashedPassword,
-        perfil,
-        active,
-        primeiroAcesso: false,
+        perfil: "User",
+        active: true,
+        primeiroAcesso: true,
         confirmed: false,
       },
     });
@@ -364,28 +381,41 @@ export const getUserPlanHistory = async (req: Request, res: Response) => {
 export const confirmEmail = async (req: Request, res: Response) => {
   try {
     const { token } = req.query;
-    if (!token || typeof token !== "string")
-      return res.status(400).json({ error: "Token ausente." });
+    if (!token || typeof token !== "string") {
+      return res.status(400).send(
+        "<html><body><p>Token ausente.</p></body></html>"
+      );
+    }
 
-    // 1) Decodifica e verifica validade
     const payload = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-
-    // 2) Busca o usuário e compara token salvo (opcional)
     const user = await prisma.user.findUnique({ where: { id: payload.userId } });
-    if (!user || user.confirmToken !== token)
-      return res.status(400).json({ error: "Token inválido ou expirado." });
+    if (!user || user.confirmToken !== token) {
+      return res.status(400).send(
+        "<html><body><p>Token inválido ou expirado. Solicite um novo e-mail de confirmação.</p></body></html>"
+      );
+    }
 
-    // 3) Marca como confirmado e limpa o token
     await prisma.user.update({
       where: { id: user.id },
       data: { confirmed: true, confirmToken: null },
     });
 
-    // 4) Pode redirecionar para uma página de sucesso ou enviar JSON
-    res.json({ message: "E-mail confirmado com sucesso!" });
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>E-mail confirmado</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:40px;background:#0A1419;color:#eee;">
+  <h1 style="color:#39FF14;">E-mail confirmado!</h1>
+  <p>Sua conta foi ativada. Você já pode fazer login no app.</p>
+</body>
+</html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(200).send(html);
   } catch (err: any) {
     console.error("[confirmEmail] erro:", err);
-    res.status(400).json({ error: "Token inválido ou expirado." });
+    res.status(400).send(
+      "<html><body><p>Token inválido ou expirado.</p></body></html>"
+    );
   }
 };
 

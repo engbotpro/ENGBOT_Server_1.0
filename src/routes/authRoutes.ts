@@ -1,6 +1,6 @@
 import { Router, RequestHandler } from "express";
 import { login, firstAccess, changePassword, googleCallback } from "../controllers/authController";
-import { register as registerHandler } from "../controllers/userController";
+import { register as registerHandler, confirmEmail } from "../controllers/userController";
 import passport from "passport";
 
 const router = Router();
@@ -10,6 +10,11 @@ router.post("/login", login);
 router.put("/changepassword", firstAccess);
 router.put("/changepasswordAlt", changePassword);
 router.post("/register", registerHandler as RequestHandler);
+
+/* --------- confirmação de e-mail (link do e-mail) --------- */
+router.get("/confirm", async (req, res) => {
+  await confirmEmail(req, res);
+});
 
 /* --------- OAuth Google --------- */
 router.get(

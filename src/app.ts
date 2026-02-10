@@ -25,6 +25,7 @@ import platformSettingsRoutes from "./routes/platformSettingsRoutes";
 import bitcoinTransactionRoutes from "./routes/bitcoinTransactionRoutes";
 import expenseTypesRoutes from "./routes/expenseTypesRoutes";
 import backtestRoutes from "./routes/backtestRoutes";
+import capitalInvestmentRoutes from "./routes/capitalInvestmentRoutes";
 import { authenticateToken } from "./middleware/authMiddleware";
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -157,18 +158,34 @@ async function bootstrap() {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
+    /* Log de requisições (diagnóstico) */
+    app.use((req: Request, _res: Response, next: any) => {
+      if (req.method === "POST" && (req.path === "/auth/login" || req.originalUrl?.includes("auth/login"))) {
+        console.log("[POST /auth/login] chegou ao app");
+      }
+      next();
+    });
+
     /* Passport precisa ser inicializado antes das rotas que o usam  */
     app.use(passport.initialize());
 
     /* ─────────── Rotas ─────────── */
+    // Teste rápido (primeira rota) - se aparecer no terminal, a requisição está chegando
+    app.get("/ping", (_req: Request, res: Response) => {
+      console.log("[GET /ping] requisição recebida");
+      res.setHeader("Content-Type", "text/plain");
+      res.status(200).end("pong");
+    });
+
     // Health check sem DB - Cloud Run precisa disso para passar no startup
     app.get("/health", (_req: Request, res: Response) => {
       res.status(200).json({ status: "ok" });
     });
 
     app.get("/", (_req: Request, res: Response) => {
-      
-      res.send("Servidor Backend em TypeScript está rodando! 🚀");
+      console.log("[GET /] requisição recebida");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(200).end("Servidor Backend em TypeScript está rodando! 🚀");
     });
 
     app.use("/users", userRoutes);
@@ -187,7 +204,18 @@ async function bootstrap() {
     app.use("/api/bitcoin-transactions", bitcoinTransactionRoutes);
     app.use("/api/expense-types", expenseTypesRoutes);
     app.use("/api/backtests", backtestRoutes);
-  
+    app.use("/api/capital-investments", capitalInvestmentRoutes);
+
+    /* ─────────── Tratamento global de erros (evita ERR_EMPTY_RESPONSE) ─────────── */
+    app.use((_req, res) => {
+      res.status(404).json({ error: "Rota não encontrada" });
+    });
+    app.use((err: any, _req: Request, res: Response, _next: any) => {
+      console.error("Erro não tratado:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Erro interno do servidor" });
+      }
+    });
 
     /* ─────────── Inicialização ─────────── */
     // Escutar na porta PRIMEIRO (Cloud Run exige isso no timeout)

@@ -58,6 +58,7 @@ model User {
   bitcoinTransactions BitcoinTransaction[]
   expenseTypes     ExpenseType[]
   backtests        Backtest[]
+  capitalInvestments CapitalInvestment[]
   
 }
 
@@ -298,6 +299,26 @@ model PendingOrder {
   updatedAt       DateTime @updatedAt
 
   @@map("PendingOrder")
+}
+
+// Investimentos do usuário (Capital Total - lista de investimentos com valor atual)
+model CapitalInvestment {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String    // 'crypto' | 'fixed_income' | 'stock' | 'real_estate'
+  name            String    // ex: "BTC", "CDB XYZ"
+  symbol          String?   // para crypto: BTCUSDT
+  amountInvested  Float     // total investido (em R$ ou USDT conforme convenção)
+  quantity        Float?    // para crypto: quantidade de unidades
+  interestRate    Float?    // para renda fixa: taxa anual % (ex: 12.5)
+  maturityDate    DateTime? // para renda fixa: data de vencimento
+  startDate       DateTime? // início do investimento (para juros); default createdAt
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("CapitalInvestment")
 }
 
 // Carteiras dos usuários (virtual e real)

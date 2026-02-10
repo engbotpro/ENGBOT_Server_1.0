@@ -10,10 +10,24 @@ const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 // 🔹 Login
 export const login = async (req: Request, res: Response): Promise<void> => {
+  console.log("[POST /auth/login] requisição recebida");
   try {
-    const { email, password } = req.body;
-
-    
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({ error: "Corpo da requisição inválido (envie JSON)" });
+      return;
+    }
+    const email = body.email != null ? String(body.email).trim() : '';
+    const password = body.password;
+    if (!email) {
+      res.status(400).json({ error: "Email ou usuário é obrigatório" });
+      return;
+    }
+    if (password == null || (typeof password !== 'string' && typeof password !== 'number')) {
+      res.status(400).json({ error: "Senha é obrigatória" });
+      return;
+    }
+    const passwordStr = typeof password === 'string' ? password : String(password);
 
     /* ── procura usuário ───────────────────────────────── */
     const user = await prisma.user.findUnique({ 
@@ -29,10 +43,21 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         billingCycle: true,
         planActivatedAt: true,
         planExpiresAt: true,
+        confirmed: true,
+        confirmToken: true,
       }
     });
     if (!user) {
       res.status(401).json({ error: "Usuário não encontrado" });
+      return;
+    }
+
+    // Só exige confirmação se ainda houver token pendente (cadastro novo não confirmado).
+    // Usuários antigos (confirmToken null) podem fazer login normalmente.
+    if (user.confirmToken != null && user.confirmToken !== '') {
+      res.status(403).json({
+        error: "Confirme seu e-mail antes de fazer login. Verifique sua caixa de entrada.",
+      });
       return;
     }
 
@@ -45,7 +70,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     /* ── valida a senha ─────────────────────────────────── */
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await bcrypt.compare(passwordStr, user.password);
     if (!isValid) {
       res.status(401).json({ error: "Senha incorreta" });
       return;
