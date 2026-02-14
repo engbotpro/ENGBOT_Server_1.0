@@ -92,7 +92,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         planExpiresAt: user.planExpiresAt?.toISOString(),
       },
       JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "7d" }
     );
     
     console.log('🎫 Token gerado:', token.substring(0, 50) + '...');
@@ -255,7 +255,7 @@ export const googleCallback = async (req: Request, res: Response) => {
         planExpiresAt: fullUser.planExpiresAt?.toISOString(),
       },
       process.env.JWT_SECRET!,
-      { expiresIn: "12h" }
+      { expiresIn: "7d" }
     );
 
     console.log('🎫 Token Google gerado:', token.substring(0, 50) + '...');

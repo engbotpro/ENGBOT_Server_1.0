@@ -59,7 +59,8 @@ model User {
   expenseTypes     ExpenseType[]
   backtests        Backtest[]
   capitalInvestments CapitalInvestment[]
-  
+  capitalSimulationInvestments CapitalSimulationInvestment[]
+
 }
 
 enum RatePeriod {
@@ -319,6 +320,26 @@ model CapitalInvestment {
   updatedAt       DateTime  @updatedAt
 
   @@map("CapitalInvestment")
+}
+
+// Investimentos apenas para simulação (não aparecem em Capital Total)
+model CapitalSimulationInvestment {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String    // 'crypto' | 'fixed_income' | 'stock' | 'real_estate'
+  name            String
+  symbol          String?
+  amountInvested  Float
+  quantity        Float?
+  interestRate    Float?
+  maturityDate    DateTime?
+  startDate       DateTime? // data da aplicação / data do investimento
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("CapitalSimulationInvestment")
 }
 
 // Carteiras dos usuários (virtual e real)
