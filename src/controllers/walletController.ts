@@ -599,6 +599,10 @@ export const executeVirtualSpotOrder = async (req: Request, res: Response) => {
         });
       }
 
+      // Se tiver SL ou TP, criar trade como 'open' para monitoramento automático
+      const hasSlOrTp = (stopLoss != null && stopLoss !== '') || (takeProfit != null && takeProfit !== '');
+      const tradeStatus = hasSlOrTp ? 'open' : 'closed';
+
       const trade = await tx.trade.create({
         data: {
           userId,
@@ -610,12 +614,12 @@ export const executeVirtualSpotOrder = async (req: Request, res: Response) => {
           total: totalUsdt,
           tradeType: 'manual',
           environment: 'simulated',
-          status: 'closed',
+          status: tradeStatus,
           entryTime: new Date(),
-          exitTime: new Date(),
-          exitPrice: price,
-          pnl: 0,
-          pnlPercent: 0,
+          exitTime: tradeStatus === 'closed' ? new Date() : null,
+          exitPrice: tradeStatus === 'closed' ? price : null,
+          pnl: tradeStatus === 'closed' ? 0 : null,
+          pnlPercent: tradeStatus === 'closed' ? 0 : null,
           stopLoss: stopLoss != null && stopLoss !== '' ? parseFloat(stopLoss) : null,
           takeProfit: takeProfit != null && takeProfit !== '' ? parseFloat(takeProfit) : null,
         },

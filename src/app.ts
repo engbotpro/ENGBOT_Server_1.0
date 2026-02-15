@@ -230,6 +230,10 @@ async function bootstrap() {
       ]).catch((err) => {
         console.error("❌ Erro na inicialização do banco:", err?.message || err);
       });
+      // Iniciar monitor de SL/TP para trades simulados
+      import("./services/tradeSlTpMonitorService").then(({ startSlTpMonitor }) => {
+        startSlTpMonitor();
+      });
     });
 
     // Iniciar serviço automático de trades para duelos de robôs
