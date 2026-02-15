@@ -27,8 +27,12 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
 
     if (openTrades.length === 0) return;
 
-    const manualCount = openTrades.filter((t) => (t.tradeType || '').toLowerCase() === 'manual').length;
+    // Manual = tradeType 'manual' OU sem botId (trades do app de trading virtual)
+    const manualCount = openTrades.filter((t) => (t.tradeType || '').toLowerCase() === 'manual' || !t.botId).length;
     console.log(`[SL/TP Monitor] Verificando ${openTrades.length} trades abertos com SL/TP (${manualCount} manuais, ${openTrades.length - manualCount} bot)`);
+    for (const t of openTrades) {
+      console.log(`   - Trade ${t.id}: ${t.side} ${t.symbol} @ ${t.price} | tradeType="${t.tradeType ?? 'null'}" | botId="${t.botId ?? 'null'}" | SL=${t.stopLoss} TP=${t.takeProfit}`);
+    }
 
     const symbols = [...new Set(openTrades.map((t) => t.symbol))];
 
@@ -60,7 +64,7 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
         const sl = trade.stopLoss ?? 0;
         const tp = trade.takeProfit ?? 0;
         const side = (trade.side || 'buy').toLowerCase();
-        const isManual = (trade.tradeType || '').toLowerCase() === 'manual';
+        const isManual = (trade.tradeType || '').toLowerCase() === 'manual' || !trade.botId;
 
         let shouldClose = false;
         let exitPrice = 0;
