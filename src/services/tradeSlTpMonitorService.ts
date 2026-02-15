@@ -6,7 +6,7 @@
 import prisma from '../prismaClient';
 import { fetchHistoricalKlines, fetchCurrentPrice } from './binanceService';
 
-const CHECK_INTERVAL_MS = 15000; // 15 segundos
+const CHECK_INTERVAL_MS = 5000; // 5 segundos - resposta mais rápida ao SL/TP
 let monitorInterval: NodeJS.Timeout | null = null;
 
 /**
@@ -30,16 +30,21 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
     const symbols = [...new Set(openTrades.map((t) => t.symbol))];
 
     for (const symbol of symbols) {
-      let candle: { high: number; low: number; close: number };
+      let currentPrice: number;
+      let candle: { high: number; low: number };
       try {
+        // Preço atual (ticker) - mais preciso para SL/TP em tempo real
+        const tickerPrice = await fetchCurrentPrice(symbol);
+        if (tickerPrice === null) continue;
+        currentPrice = tickerPrice;
+
+        // Candle 1m para capturar toques que possam ter ocorrido entre verificações
         const klines = await fetchHistoricalKlines(symbol, '1m', 2);
         if (klines && klines.length >= 1) {
           const last = klines[klines.length - 1];
-          candle = { high: last.high, low: last.low, close: last.close };
+          candle = { high: last.high, low: last.low };
         } else {
-          const price = await fetchCurrentPrice(symbol);
-          if (price === null) continue;
-          candle = { high: price, low: price, close: price };
+          candle = { high: currentPrice, low: currentPrice };
         }
       } catch (e) {
         console.warn(`[SL/TP Monitor] Erro ao buscar preço para ${symbol}:`, e);
@@ -58,23 +63,26 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
         let reason = '';
 
         if (side === 'buy') {
-          // Long: SL abaixo do preço de entrada, TP acima
-          if (sl > 0 && candle.low <= sl) {
+          // Long: SL abaixo do preço de entrada - fecha quando preço cai até ou abaixo do SL
+          // TP acima do preço de entrada - fecha quando preço sobe até ou acima do TP
+          // Verifica preço atual E range do candle (para capturar toques que reverteram)
+          if (sl > 0 && (currentPrice <= sl || candle.low <= sl)) {
             shouldClose = true;
             exitPrice = sl;
             reason = 'stop_loss';
-          } else if (tp > 0 && candle.high >= tp) {
+          } else if (tp > 0 && (currentPrice >= tp || candle.high >= tp)) {
             shouldClose = true;
             exitPrice = tp;
             reason = 'take_profit';
           }
         } else {
-          // Short: SL acima do preço de entrada, TP abaixo
-          if (sl > 0 && candle.high >= sl) {
+          // Short: SL acima do preço de entrada - fecha quando preço sobe até ou acima do SL
+          // TP abaixo do preço de entrada - fecha quando preço cai até ou abaixo do TP
+          if (sl > 0 && (currentPrice >= sl || candle.high >= sl)) {
             shouldClose = true;
             exitPrice = sl;
             reason = 'stop_loss';
-          } else if (tp > 0 && candle.low <= tp) {
+          } else if (tp > 0 && (currentPrice <= tp || candle.low <= tp)) {
             shouldClose = true;
             exitPrice = tp;
             reason = 'take_profit';
