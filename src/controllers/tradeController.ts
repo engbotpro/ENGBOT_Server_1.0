@@ -166,22 +166,25 @@ export const updateTrade = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Trade não encontrado' });
     }
 
-    // Atualizar o trade
+    // Atualizar o trade - SL/TP são fixos e NUNCA devem ser alterados ao fechar
+    const updateData: any = {
+      pnl: pnl !== undefined ? parseFloat(pnl) : undefined,
+      pnlPercent: pnlPercent !== undefined ? parseFloat(pnlPercent) : undefined,
+      status: status || undefined,
+      exitTime: exitTime ? new Date(exitTime) : undefined,
+      fees: fees !== undefined ? parseFloat(fees) : undefined,
+      exitPrice: exitPrice !== undefined ? parseFloat(exitPrice) : undefined,
+      notes: notes || undefined,
+    };
+    // Só permite alterar SL/TP se o trade continuar aberto (não ao fechar)
+    if (status !== 'closed' && status !== 'cancelled') {
+      if (takeProfit !== undefined) updateData.takeProfit = takeProfit ? parseFloat(takeProfit) : null;
+      if (stopLoss !== undefined) updateData.stopLoss = stopLoss ? parseFloat(stopLoss) : null;
+    }
+
     const updatedTrade = await prisma.trade.update({
-      where: {
-        id: tradeId
-      },
-      data: {
-        pnl: pnl !== undefined ? parseFloat(pnl) : undefined,
-        pnlPercent: pnlPercent !== undefined ? parseFloat(pnlPercent) : undefined,
-        status: status || undefined,
-        exitTime: exitTime ? new Date(exitTime) : undefined,
-        fees: fees !== undefined ? parseFloat(fees) : undefined,
-        exitPrice: exitPrice !== undefined ? parseFloat(exitPrice) : undefined,
-        notes: notes || undefined,
-        takeProfit: takeProfit !== undefined ? (takeProfit ? parseFloat(takeProfit) : null) : undefined,
-        stopLoss: stopLoss !== undefined ? (stopLoss ? parseFloat(stopLoss) : null) : undefined
-      }
+      where: { id: tradeId },
+      data: updateData
     });
 
     // Se o trade foi fechado e tem P/L, atualizar a carteira virtual
