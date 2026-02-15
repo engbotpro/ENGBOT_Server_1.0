@@ -27,6 +27,9 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
 
     if (openTrades.length === 0) return;
 
+    const manualCount = openTrades.filter((t) => (t.tradeType || '').toLowerCase() === 'manual').length;
+    console.log(`[SL/TP Monitor] Verificando ${openTrades.length} trades abertos com SL/TP (${manualCount} manuais, ${openTrades.length - manualCount} bot)`);
+
     const symbols = [...new Set(openTrades.map((t) => t.symbol))];
 
     for (const symbol of symbols) {
@@ -57,23 +60,40 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
         const sl = trade.stopLoss ?? 0;
         const tp = trade.takeProfit ?? 0;
         const side = (trade.side || 'buy').toLowerCase();
+        const isManual = (trade.tradeType || '').toLowerCase() === 'manual';
 
         let shouldClose = false;
         let exitPrice = 0;
         let reason = '';
 
+        // Log detalhado para trades manuais (e resumido para outros)
+        const logPrefix = isManual ? '[SL/TP Monitor] [MANUAL]' : '[SL/TP Monitor]';
+        if (isManual) {
+          console.log(`${logPrefix} Verificando trade ${trade.id}:`);
+          console.log(`   - Trade: ${trade.side.toUpperCase()} ${trade.quantity} ${trade.symbol} @ ${trade.price}`);
+          console.log(`   - Preço atual: High=${candle.high.toFixed(2)}, Low=${candle.low.toFixed(2)}, Ticker=${currentPrice.toFixed(2)}`);
+          console.log(`   - Stop Loss: ${sl > 0 ? sl.toFixed(2) : 'não configurado'}`);
+          console.log(`   - Take Profit: ${tp > 0 ? tp.toFixed(2) : 'não configurado'}`);
+        }
+
         if (side === 'buy') {
           // Long: SL abaixo do preço de entrada - fecha quando preço cai até ou abaixo do SL
           // TP acima do preço de entrada - fecha quando preço sobe até ou acima do TP
-          // Verifica preço atual E range do candle (para capturar toques que reverteram)
           if (sl > 0 && (currentPrice <= sl || candle.low <= sl)) {
             shouldClose = true;
             exitPrice = sl;
             reason = 'stop_loss';
-          } else if (tp > 0 && (currentPrice >= tp || candle.high >= tp)) {
+            if (isManual) console.log(`   * ✅ STOP LOSS ATINGIDO! (Low ${candle.low.toFixed(2)} <= SL ${sl.toFixed(2)} ou Ticker ${currentPrice.toFixed(2)} <= SL)`);
+          } else if (sl > 0 && isManual) {
+            console.log(`   * Comparando SL: Low (${candle.low.toFixed(2)}) <= SL (${sl.toFixed(2)}) | Ticker (${currentPrice.toFixed(2)}) <= SL → não atingido`);
+          }
+          if (tp > 0 && (currentPrice >= tp || candle.high >= tp)) {
             shouldClose = true;
             exitPrice = tp;
             reason = 'take_profit';
+            if (isManual) console.log(`   * ✅ TAKE PROFIT ATINGIDO! (High ${candle.high.toFixed(2)} >= TP ${tp.toFixed(2)} ou Ticker ${currentPrice.toFixed(2)} >= TP)`);
+          } else if (tp > 0 && isManual) {
+            console.log(`   * Comparando TP: High (${candle.high.toFixed(2)}) >= TP (${tp.toFixed(2)}) | Ticker (${currentPrice.toFixed(2)}) >= TP → não atingido`);
           }
         } else {
           // Short: SL acima do preço de entrada - fecha quando preço sobe até ou acima do SL
@@ -82,11 +102,22 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
             shouldClose = true;
             exitPrice = sl;
             reason = 'stop_loss';
-          } else if (tp > 0 && (currentPrice <= tp || candle.low <= tp)) {
+            if (isManual) console.log(`   * ✅ STOP LOSS ATINGIDO! (High ${candle.high.toFixed(2)} >= SL ${sl.toFixed(2)} ou Ticker ${currentPrice.toFixed(2)} >= SL)`);
+          } else if (sl > 0 && isManual) {
+            console.log(`   * Comparando SL: High (${candle.high.toFixed(2)}) >= SL (${sl.toFixed(2)}) | Ticker (${currentPrice.toFixed(2)}) >= SL → não atingido`);
+          }
+          if (tp > 0 && (currentPrice <= tp || candle.low <= tp)) {
             shouldClose = true;
             exitPrice = tp;
             reason = 'take_profit';
+            if (isManual) console.log(`   * ✅ TAKE PROFIT ATINGIDO! (Low ${candle.low.toFixed(2)} <= TP ${tp.toFixed(2)} ou Ticker ${currentPrice.toFixed(2)} <= TP)`);
+          } else if (tp > 0 && isManual) {
+            console.log(`   * Comparando TP: Low (${candle.low.toFixed(2)}) <= TP (${tp.toFixed(2)}) | Ticker (${currentPrice.toFixed(2)}) <= TP → não atingido`);
           }
+        }
+
+        if (isManual && !shouldClose) {
+          console.log(`   - ⏳ Trade permanece aberto (nenhuma condição atendida)`);
         }
 
         if (shouldClose && exitPrice > 0) {
