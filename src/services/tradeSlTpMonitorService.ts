@@ -64,7 +64,7 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
 
         let shouldClose = false;
         let exitPrice = 0;
-        let reason = '';
+        let reason: 'stop_loss' | 'take_profit' | '' = '';
 
         // Log detalhado para trades manuais (e resumido para outros)
         const logPrefix = isManual ? '[SL/TP Monitor] [MANUAL]' : '[SL/TP Monitor]';
@@ -120,7 +120,7 @@ export async function checkAndCloseSlTpTrades(): Promise<void> {
           console.log(`   - ⏳ Trade permanece aberto (nenhuma condição atendida)`);
         }
 
-        if (shouldClose && exitPrice > 0) {
+        if (shouldClose && exitPrice > 0 && reason) {
           await closeSimulatedTrade(trade, exitPrice, reason);
         }
       }
