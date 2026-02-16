@@ -396,50 +396,46 @@ export const calcSpending = async (
       despesasReaisDefined: despesasReais !== undefined,
     });
 
-    // Preparar dados para salvar
-    const updateData: any = {
-      receitas: receitas as unknown as Prisma.InputJsonValue,
-      despesas: despesas as unknown as Prisma.InputJsonValue,
-    };
-
-    // Incluir dados realizados se fornecidos (mesmo que seja array vazio)
+    // Preparar dados para update - só incluir campos que foram enviados
+    const updateData: Record<string, Prisma.InputJsonValue> = {};
+    if (receitas !== undefined) {
+      updateData.receitas = receitas as unknown as Prisma.InputJsonValue;
+    }
+    if (despesas !== undefined) {
+      updateData.despesas = despesas as unknown as Prisma.InputJsonValue;
+    }
     if (receitasReais !== undefined) {
-      updateData.receitasReais = (receitasReais.length > 0 
+      updateData.receitasReais = receitasReais.length > 0
         ? (receitasReais as unknown as Prisma.InputJsonValue)
-        : ([] as unknown as Prisma.InputJsonValue));
+        : ([] as unknown as Prisma.InputJsonValue);
       console.log('🔵 [calcSpending] receitasReais adicionado ao updateData:', receitasReais.length);
     } else {
       console.log('🔵 [calcSpending] receitasReais é undefined, não será atualizado');
     }
-    
     if (despesasReais !== undefined) {
-      updateData.despesasReais = (despesasReais.length > 0 
+      updateData.despesasReais = despesasReais.length > 0
         ? (despesasReais as unknown as Prisma.InputJsonValue)
-        : ([] as unknown as Prisma.InputJsonValue));
+        : ([] as unknown as Prisma.InputJsonValue);
       console.log('🔵 [calcSpending] despesasReais adicionado ao updateData:', despesasReais.length);
     } else {
       console.log('🔵 [calcSpending] despesasReais é undefined, não será atualizado');
     }
 
     console.log('🔵 [calcSpending] updateData preparado:', {
-      hasReceitas: !!updateData.receitas,
-      hasDespesas: !!updateData.despesas,
-      hasReceitasReais: !!updateData.receitasReais,
-      hasDespesasReais: !!updateData.despesasReais,
+      hasReceitas: 'receitas' in updateData,
+      hasDespesas: 'despesas' in updateData,
+      hasReceitasReais: 'receitasReais' in updateData,
+      hasDespesasReais: 'despesasReais' in updateData,
     });
 
     const plan = await prisma.spendingPlan.upsert({
       where: { userId: userId.trim() },
       create: {
         userId: userId.trim(),
-        receitas: receitas as unknown as Prisma.InputJsonValue,
-        despesas: despesas as unknown as Prisma.InputJsonValue,
-        receitasReais: receitasReais 
-          ? (receitasReais as unknown as Prisma.InputJsonValue)
-          : undefined,
-        despesasReais: despesasReais 
-          ? (despesasReais as unknown as Prisma.InputJsonValue)
-          : undefined,
+        receitas: (receitas ?? []) as unknown as Prisma.InputJsonValue,
+        despesas: (despesas ?? []) as unknown as Prisma.InputJsonValue,
+        receitasReais: (receitasReais ?? []) as unknown as Prisma.InputJsonValue,
+        despesasReais: (despesasReais ?? []) as unknown as Prisma.InputJsonValue,
       },
       update: updateData,
     });
