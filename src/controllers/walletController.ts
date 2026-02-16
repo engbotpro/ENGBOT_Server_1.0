@@ -489,7 +489,7 @@ export const removeWalletAsset = async (req: Request, res: Response) => {
 export const executeVirtualSpotOrder = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    const { side, symbol, quantity, price, stopLoss, takeProfit } = req.body;
+    const { side, symbol, quantity, price, stopLoss, takeProfit, closeTradeIds } = req.body;
 
     if (!side || !symbol || !quantity || quantity <= 0 || !price || price <= 0) {
       return res.status(400).json({
@@ -625,6 +625,26 @@ export const executeVirtualSpotOrder = async (req: Request, res: Response) => {
         },
       });
       (req as any).__createdTrade = trade;
+
+      // Ao vender, fechar os trades indicados (posição manual ou bot independente)
+      const ids = Array.isArray(closeTradeIds) ? closeTradeIds.filter((id: unknown) => typeof id === 'string') : [];
+      if (sideLower === 'sell' && ids.length > 0) {
+        await tx.trade.updateMany({
+          where: {
+            id: { in: ids },
+            userId,
+            side: 'buy',
+            status: 'open',
+          },
+          data: {
+            status: 'closed',
+            exitTime: new Date(),
+            exitPrice: price,
+            pnl: 0,
+            pnlPercent: 0,
+          },
+        });
+      }
     });
 
     const createdTrade = (req as any).__createdTrade;
