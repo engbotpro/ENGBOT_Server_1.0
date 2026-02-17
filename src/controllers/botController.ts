@@ -72,6 +72,7 @@ export const createBot = async (req: Request, res: Response) => {
       symbol,
       timeframe,
       startDate,
+      endDate,
       operationMode,
       operationTime,
       primaryIndicator,
@@ -131,6 +132,7 @@ export const createBot = async (req: Request, res: Response) => {
         symbol,
         timeframe: timeframe || '1h',
         startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : undefined,
         operationMode,
         operationTime: operationTime ? JSON.stringify(operationTime) : undefined,
         primaryIndicator,
@@ -222,6 +224,9 @@ export const updateBot = async (req: Request, res: Response) => {
     }
     if (updateData.startDate) {
       updateData.startDate = new Date(updateData.startDate);
+    }
+    if (updateData.endDate !== undefined) {
+      updateData.endDate = updateData.endDate ? new Date(updateData.endDate) : null;
     }
 
     const bot = await prisma.bot.update({

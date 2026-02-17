@@ -500,6 +500,7 @@ model Bot {
   timeframe         String   @default("1h") // Tempo gráfico (ex: '1m', '5m', '15m', '1h', '4h', '1d')
   isActive          Boolean  @default(false)
   startDate         DateTime
+  endDate           DateTime? // Data de término (opcional)
   
   // Modo de operação
   operationMode     String   // 'immediate' | 'scheduled'
