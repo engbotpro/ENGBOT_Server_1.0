@@ -1,16 +1,23 @@
 // src/utils/emailSender.ts
 import nodemailer from "nodemailer";
 
+function isSmtpConfigured(): boolean {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
+  host: process.env.SMTP_HOST || "localhost",
+  port: Number(process.env.SMTP_PORT) || 587,
+  auth: process.env.SMTP_USER && process.env.SMTP_PASS
+    ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    : undefined,
+  secure: false,
 });
 
 export async function sendConfirmationEmail(email: string, token: string) {
+  if (!isSmtpConfigured()) {
+    throw new Error("SMTP não configurado. Defina SMTP_HOST, SMTP_USER e SMTP_PASS no .env");
+  }
   const baseUrl = process.env.BACKEND_URL || process.env.API_URL || process.env.FRONTEND_URL || "http://localhost:5000";
   const url = `${baseUrl}/auth/confirm?token=${encodeURIComponent(token)}`;
   await transporter.sendMail({

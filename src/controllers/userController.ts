@@ -150,8 +150,17 @@ export const register = async (
       data: { confirmToken: token },
     });
 
-    // 4) Envia e-mail de confirmação
-    await sendConfirmationEmail(email, token);
+    // 4) Envia e-mail de confirmação (não bloqueia o cadastro se falhar)
+    try {
+      await sendConfirmationEmail(email, token);
+    } catch (emailErr: any) {
+      console.error("[register] Erro ao enviar e-mail de confirmação:", emailErr);
+      // Usuário já foi criado; retorna sucesso com mensagem alternativa
+      return res.status(201).json({
+        message: "Cadastro realizado. Não foi possível enviar o e-mail de confirmação automaticamente. Entre em contato pelo 'Fale com a EngBot' para solicitar a confirmação.",
+        emailNotSent: true,
+      });
+    }
 
     // 5) Responde 201
     res
@@ -375,6 +384,42 @@ export const getUserPlanHistory = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("[getUserPlanHistory] Erro ao buscar histórico de planos:", error);
     res.status(500).json({ error: "Erro ao buscar histórico de planos" });
+  }
+};
+
+export const resendConfirmationEmail = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body || {};
+    const emailStr = (email || "").trim().toLowerCase();
+    if (!emailStr) {
+      return res.status(400).json({ error: "E-mail é obrigatório." });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: emailStr } });
+    if (!user) {
+      return res.status(404).json({ error: "E-mail não encontrado." });
+    }
+    if (!user.confirmToken) {
+      return res.status(400).json({ error: "Esta conta já está confirmada. Faça login." });
+    }
+
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: "24h" });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { confirmToken: token },
+    });
+
+    try {
+      await sendConfirmationEmail(emailStr, token);
+    } catch (emailErr: any) {
+      console.error("[resendConfirmation] Erro ao enviar e-mail:", emailErr);
+      return res.status(500).json({ error: "Não foi possível enviar o e-mail. Tente novamente mais tarde." });
+    }
+
+    res.status(200).json({ message: "E-mail de confirmação reenviado. Verifique sua caixa de entrada e spam." });
+  } catch (err: any) {
+    console.error("[resendConfirmation] erro:", err);
+    res.status(500).json({ error: "Erro ao processar solicitação." });
   }
 };
 

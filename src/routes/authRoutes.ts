@@ -1,6 +1,6 @@
 import { Router, RequestHandler } from "express";
 import { login, firstAccess, changePassword, googleCallback } from "../controllers/authController";
-import { register as registerHandler, confirmEmail } from "../controllers/userController";
+import { register as registerHandler, confirmEmail, resendConfirmationEmail } from "../controllers/userController";
 import passport from "passport";
 
 const router = Router();
@@ -10,6 +10,7 @@ router.post("/login", login);
 router.put("/changepassword", firstAccess);
 router.put("/changepasswordAlt", changePassword);
 router.post("/register", registerHandler as RequestHandler);
+router.post("/resend-confirmation", resendConfirmationEmail as RequestHandler);
 
 /* --------- confirmação de e-mail (link do e-mail) --------- */
 router.get("/confirm", async (req, res) => {
@@ -52,28 +53,36 @@ router.get("/google/mobile-done", (req, res) => {
     return;
   }
   const deepLink = `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`;
+  const escapedDeepLink = deepLink.replace(/"/g, "&quot;").replace(/</g, "\\u003c");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
   <title>Login realizado</title>
   <style>
     body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0a1419; color: #fff; padding: 20px; text-align: center; }
     h2 { color: #39ff14; }
     p { opacity: 0.9; }
-    a { display: inline-block; margin-top: 16px; padding: 12px 24px; background: #39ff14; color: #000; text-decoration: none; border-radius: 8px; font-weight: 600; }
+    a { display: inline-block; margin-top: 16px; padding: 14px 28px; background: #39ff14; color: #000; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
   </style>
 </head>
 <body>
   <h2>Login realizado com sucesso!</h2>
   <p>Retornando ao app...</p>
   <p style="font-size:12px;opacity:0.6;">Se a janela não fechar automaticamente, toque no botão abaixo.</p>
-  <a href="${deepLink.replace(/"/g, "&quot;")}" id="backBtn">Retornar ao app</a>
+  <a href="${escapedDeepLink}" id="backBtn">Retornar ao app</a>
   <script>
-    window.location.href = ${JSON.stringify(deepLink)};
+    (function() {
+      var dl = ${JSON.stringify(deepLink)};
+      setTimeout(function() {
+        window.location.href = dl;
+      }, 500);
+    })();
   </script>
 </body>
 </html>
