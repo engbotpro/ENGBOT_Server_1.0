@@ -267,9 +267,10 @@ export const googleCallback = async (req: Request, res: Response) => {
 
     let redirectUrl: string;
     if (isMobile) {
-      // Deep link para mobile app
-      redirectUrl = `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`;
-      console.log('📱 Detectado mobile - redirecionando para deep link');
+      // Página intermediária HTML que fecha o Custom Tab e passa o token ao app
+      const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
+      redirectUrl = `${serverUrl}/auth/google/mobile-done?googleToken=${encodeURIComponent(token)}`;
+      console.log('📱 Detectado mobile - redirecionando para página de conclusão');
     } else {
       // Redirect para web SPA
       redirectUrl = `${process.env.FRONT_ORIGIN}/login/google-redirect?googleToken=${encodeURIComponent(token)}`;
