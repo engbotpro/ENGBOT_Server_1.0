@@ -27,6 +27,7 @@ import expenseTypesRoutes from "./routes/expenseTypesRoutes";
 import backtestRoutes from "./routes/backtestRoutes";
 import capitalInvestmentRoutes from "./routes/capitalInvestmentRoutes";
 import capitalSimulationInvestmentRoutes from "./routes/capitalSimulationInvestmentRoutes";
+import userFeedbackRoutes from "./routes/userFeedbackRoutes";
 import { authenticateToken } from "./middleware/authMiddleware";
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -207,6 +208,7 @@ async function bootstrap() {
     app.use("/api/backtests", backtestRoutes);
     app.use("/api/capital-investments", capitalInvestmentRoutes);
     app.use("/api/capital-simulation-investments", capitalSimulationInvestmentRoutes);
+    app.use("/api/feedback", userFeedbackRoutes);
 
     /* ─────────── Tratamento global de erros (evita ERR_EMPTY_RESPONSE) ─────────── */
     app.use((_req, res) => {

@@ -60,7 +60,20 @@ model User {
   backtests        Backtest[]
   capitalInvestments CapitalInvestment[]
   capitalSimulationInvestments CapitalSimulationInvestment[]
+  userFeedbacks    UserFeedback[]
 
+}
+
+// Feedback do usuário (Fale com a EngBot) - erros e sugestões
+model UserFeedback {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String   @db.Text
+  type      String   @default("suggestion") // 'error' | 'suggestion'
+  createdAt DateTime @default(now())
+
+  @@map("UserFeedback")
 }
 
 enum RatePeriod {
