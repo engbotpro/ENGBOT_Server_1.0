@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../prismaClient";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -286,44 +287,36 @@ export const updateUser = async (req: Request, res: Response) => {
   }
 };
 
-// 🔹 Excluir usuário (remove manualmente dados associados - banco em produção pode não ter CASCADE)
+// 🔹 Excluir usuário (remove manualmente dados associados via SQL - banco em produção não tem CASCADE)
 export const deleteUser = async (req: Request, res: Response) => {
   const { id } = req.params;
   console.log("[deleteUser] Iniciando exclusão do usuário:", id);
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.challengeTrade.deleteMany({ where: { userId: id } });
-      await tx.tokenTransaction.deleteMany({ where: { userId: id } });
-      await tx.challenge.deleteMany({
-        where: {
-          OR: [
-            { challengerId: id },
-            { challengedId: id },
-            { winnerId: id },
-            { loserId: id },
-          ],
-        },
-      });
-      await tx.trade.deleteMany({ where: { userId: id } });
-      await tx.pendingOrder.deleteMany({ where: { userId: id } });
-      await tx.backtest.deleteMany({ where: { userId: id } });
-      await tx.capitalSimulationInvestment.deleteMany({ where: { userId: id } });
-      await tx.capitalInvestment.deleteMany({ where: { userId: id } });
-      await tx.expenseType.deleteMany({ where: { userId: id } });
-      await tx.bitcoinTransaction.deleteMany({ where: { userId: id } });
-      await tx.testerRequest.deleteMany({ where: { userId: id } });
-      await tx.chatMessage.deleteMany({ where: { userId: id } });
-      await tx.userFeedback.deleteMany({ where: { userId: id } });
-      await tx.bot.deleteMany({ where: { userId: id } });
-      await tx.wallet.deleteMany({ where: { userId: id } });
-      await tx.userChallengeStats.deleteMany({ where: { userId: id } });
-      await tx.planHistory.deleteMany({ where: { userId: id } });
-      await tx.pixTransaction.deleteMany({ where: { userId: id } });
-      await tx.paymentTransaction.deleteMany({ where: { userId: id } });
-      await tx.technicalIndicator.deleteMany({ where: { userId: id } });
-      await tx.spendingPlan.deleteMany({ where: { userId: id } });
-      await tx.financialIndependence.deleteMany({ where: { userId: id } });
-      await tx.compoundInterest.deleteMany({ where: { userId: id } });
+      const del = (table: string) => tx.$executeRaw(Prisma.sql`DELETE FROM ${Prisma.raw(table)} WHERE "userId" = ${id}`);
+      await del('"ChallengeTrade"');
+      await del('"TokenTransaction"');
+      await tx.$executeRaw(Prisma.sql`DELETE FROM "Challenge" WHERE "challengerId" = ${id} OR "challengedId" = ${id} OR "winnerId" = ${id} OR "loserId" = ${id}`);
+      await del('"Trade"');
+      await del('"PendingOrder"');
+      await del('"Backtest"');
+      await del('"CapitalSimulationInvestment"');
+      await del('"CapitalInvestment"');
+      await del('"ExpenseType"');
+      await del('"BitcoinTransaction"');
+      await del('"TesterRequest"');
+      await del('"ChatMessage"');
+      await del('"UserFeedback"');
+      await del('"Bot"');
+      await del('"Wallet"');
+      await del('"UserChallengeStats"');
+      await del('"PlanHistory"');
+      await del('"PixTransaction"');
+      await del('"PaymentTransaction"');
+      await del('"TechnicalIndicator"');
+      await del('"SpendingPlan"');
+      await del('"FinancialIndependence"');
+      await del('"CompoundInterest"');
       await tx.user.delete({ where: { id } });
     });
     console.log("[deleteUser] Usuário deletado com sucesso:", id);
