@@ -68,6 +68,51 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             },
           });
         }
+
+        // Garantir UserChallengeStats (1000 tokens) e Wallet ($10.000 USDT virtual) para usuários Google
+        const hasStats = await prisma.userChallengeStats.findUnique({
+          where: { userId: user.id }
+        });
+        if (!hasStats) {
+          await prisma.userChallengeStats.create({
+            data: {
+              userId: user.id,
+              tokens: 1000,
+              totalWins: 0,
+              totalLosses: 0,
+              winRate: 0,
+              totalProfit: 0,
+              totalChallenges: 0,
+              activeChallenges: 0,
+              bestWinStreak: 0,
+              currentStreak: 0,
+              averageReturn: 0,
+              bestReturn: 0,
+              worstReturn: 0,
+              autoAccept: false,
+              minBetAmount: 10,
+              maxBetAmount: 500
+            }
+          });
+        }
+
+        const hasVirtualWallet = await prisma.wallet.findUnique({
+          where: {
+            userId_type_symbol: { userId: user.id, type: "virtual", symbol: "USDT" }
+          }
+        });
+        if (!hasVirtualWallet) {
+          await prisma.wallet.create({
+            data: {
+              userId: user.id,
+              type: "virtual",
+              symbol: "USDT",
+              name: "Tether USD",
+              balance: 10000,
+              value: 10000
+            }
+          });
+        }
         
         console.log('✅ Usuário processado com sucesso:', user.id);
         done(null, user);
