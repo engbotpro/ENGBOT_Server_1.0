@@ -1,5 +1,5 @@
 import { Router, RequestHandler } from "express";
-import { login, firstAccess, changePassword, googleCallback } from "../controllers/authController";
+import { login, firstAccess, changePassword, googleCallback, googleTokenLogin } from "../controllers/authController";
 import { register as registerHandler, confirmEmail, resendConfirmationEmail } from "../controllers/userController";
 import passport from "passport";
 
@@ -15,6 +15,13 @@ router.post("/resend-confirmation", resendConfirmationEmail as RequestHandler);
 /* --------- confirmação de e-mail (link do e-mail) --------- */
 router.get("/confirm", async (req, res) => {
   await confirmEmail(req, res);
+});
+
+/* --------- Google ID Token (mobile - google_sign_in) --------- */
+router.post("/google/token", googleTokenLogin);
+router.get("/google/client-id", (_req, res) => {
+  const id = process.env.GOOGLE_CLIENT_ID;
+  res.json({ clientId: id || "" });
 });
 
 /* --------- OAuth Google --------- */

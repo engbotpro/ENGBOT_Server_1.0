@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../prismaClient";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import 'dotenv/config';
 
 
@@ -205,6 +206,149 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
   }
 };
 
+
+// Login com Google via ID Token (mobile - google_sign_in)
+export const googleTokenLogin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken || typeof idToken !== "string") {
+      res.status(400).json({ error: "idToken é obrigatório" });
+      return;
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      console.error("GOOGLE_CLIENT_ID não configurado");
+      res.status(500).json({ error: "Login com Google não configurado" });
+      return;
+    }
+
+    const client = new OAuth2Client(clientId);
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: clientId,
+    });
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email || !payload.sub) {
+      res.status(401).json({ error: "Token inválido ou expirado" });
+      return;
+    }
+
+    const email = payload.email;
+    const googleId = payload.sub;
+    const name = payload.name || payload.email?.split("@")[0] || "Usuário";
+
+    let user = await prisma.user.findUnique({ where: { googleId } });
+    if (!user) {
+      user = await prisma.user.upsert({
+        where: { email },
+        update: {
+          name,
+          googleId,
+          active: true,
+        },
+        create: {
+          email,
+          name,
+          googleId,
+          active: true,
+          perfil: "usuario",
+        },
+      });
+    } else if (user.name !== name || user.email !== email) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { name, email },
+      });
+    }
+
+    const hasStats = await prisma.userChallengeStats.findUnique({
+      where: { userId: user.id },
+    });
+    if (!hasStats) {
+      await prisma.userChallengeStats.create({
+        data: {
+          userId: user.id,
+          tokens: 1000,
+          totalWins: 0,
+          totalLosses: 0,
+          winRate: 0,
+          totalProfit: 0,
+          totalChallenges: 0,
+          activeChallenges: 0,
+          bestWinStreak: 0,
+          currentStreak: 0,
+          averageReturn: 0,
+          bestReturn: 0,
+          worstReturn: 0,
+          autoAccept: false,
+          minBetAmount: 10,
+          maxBetAmount: 500,
+        },
+      });
+    }
+
+    const hasVirtualWallet = await prisma.wallet.findUnique({
+      where: {
+        userId_type_symbol: { userId: user.id, type: "virtual", symbol: "USDT" },
+      },
+    });
+    if (!hasVirtualWallet) {
+      await prisma.wallet.create({
+        data: {
+          userId: user.id,
+          type: "virtual",
+          symbol: "USDT",
+          name: "Tether USD",
+          balance: 10000,
+          value: 10000,
+        },
+      });
+    }
+
+    const fullUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        email: true,
+        perfil: true,
+        name: true,
+        currentPlan: true,
+        billingCycle: true,
+        planActivatedAt: true,
+        planExpiresAt: true,
+      },
+    });
+    if (!fullUser) {
+      res.status(500).json({ error: "Erro ao buscar usuário" });
+      return;
+    }
+
+    const token = jwt.sign(
+      {
+        id: fullUser.id,
+        email: fullUser.email,
+        perfil: fullUser.perfil,
+        name: fullUser.name,
+        currentPlan: fullUser.currentPlan,
+        billingCycle: fullUser.billingCycle,
+        planActivatedAt: fullUser.planActivatedAt?.toISOString(),
+        planExpiresAt: fullUser.planExpiresAt?.toISOString(),
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Login bem-sucedido",
+      token,
+      primeiroAcesso: false,
+    });
+  } catch (err) {
+    console.error("Erro no login Google (idToken):", err);
+    res.status(401).json({ error: "Token inválido ou expirado" });
+  }
+};
 
 export const googleCallback = async (req: Request, res: Response) => {
   console.log('🔄 Google callback iniciado');
