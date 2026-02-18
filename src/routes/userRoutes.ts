@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, RequestHandler } from "express";
 import { createUser, getUsers, updateUser, deleteUser, getDashboardStats, getUserPlanHistory, acceptTerms, checkTermsAccepted } from "../controllers/userController";
 import { authenticateToken } from "../middleware/authMiddleware";
 
@@ -9,7 +9,7 @@ router.get("/stats", getDashboardStats);
 router.get("/:userId/plan-history", getUserPlanHistory);
 router.post("/", createUser);
 router.put("/:id", updateUser);
-router.delete("/:id", deleteUser);
+router.delete("/:id", deleteUser as RequestHandler);
 
 // Rotas de termos (requerem autenticação)
 router.post("/terms/accept", authenticateToken, async (req, res) => {
