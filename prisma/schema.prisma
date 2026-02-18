@@ -90,7 +90,7 @@ enum TermUnit {
 model CompoundInterest {
   id                String     @id @default(uuid())
   userId            String
-  user              User       @relation(fields: [userId], references: [id])
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Entradas de cálculo
   initial           Float?
@@ -115,7 +115,7 @@ model CompoundInterest {
 
 model FinancialIndependence {
   id                 String   @id @default(uuid())
-  user               User     @relation(fields: [userId], references: [id])
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId             String   
 
   /* parâmetros de entrada */
@@ -144,7 +144,7 @@ model FinancialIndependence {
 model SpendingPlan {
   id              String   @id @default(uuid())
   userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   receitas        Json     // array of { id, description, value, expenseType, ... } - PLANEJADAS
   despesas        Json     // array of { id, description, value, expenseType, ... } - PLANEJADAS
   receitasReais   Json?    // array of { id, description, value, expenseType, ... } - REALIZADAS
@@ -159,7 +159,7 @@ model SpendingPlan {
 model TechnicalIndicator {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Tipo do indicador
   type      String   // 'moving_average', 'bollinger_bands', 'macd', etc.
@@ -184,7 +184,7 @@ model TechnicalIndicator {
 model PaymentTransaction {
   id                    String   @id @default(uuid())
   userId                String?
-  user                  User?    @relation(fields: [userId], references: [id])
+  user                  User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   
   stripePaymentIntentId String   @unique
   amount                Float
@@ -203,7 +203,7 @@ model PaymentTransaction {
 model PixTransaction {
   id                    String    @id @default(uuid())
   userId                String?
-  user                  User?     @relation(fields: [userId], references: [id])
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   
   stripePaymentIntentId String    @unique
   amount                Float
@@ -223,7 +223,7 @@ model PixTransaction {
 model PlanHistory {
   id           String   @id @default(uuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id])
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   planName     String
   oldPlan      String?  // Plano anterior (para upgrades/downgrades)
@@ -242,7 +242,7 @@ model PlanHistory {
 model Trade {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Informações básicas do trade
   symbol          String   // Par de trading (ex: BTCUSDT)
@@ -287,7 +287,7 @@ model Trade {
 model PendingOrder {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Informações básicas da ordem
   symbol          String   // Par de trading (ex: BTCUSDT)
@@ -359,7 +359,7 @@ model CapitalSimulationInvestment {
 model Wallet {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Tipo da carteira
   type            String   // 'virtual' | 'real'
@@ -387,7 +387,7 @@ model Wallet {
 model UserChallengeStats {
   id              String   @id @default(uuid())
   userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Dados fictícios para o sistema de desafios
   tokens          Float    @default(1000)  // Tokens disponíveis para apostas
@@ -431,9 +431,9 @@ model Challenge {
   
   // Participantes
   challengerId      String
-  challenger        User     @relation("Challenger", fields: [challengerId], references: [id])
+  challenger        User     @relation("Challenger", fields: [challengerId], references: [id], onDelete: Cascade)
   challengedId      String
-  challenged        User     @relation("Challenged", fields: [challengedId], references: [id])
+  challenged        User     @relation("Challenged", fields: [challengedId], references: [id], onDelete: Cascade)
   
   // Configurações do desafio
   duration          Float    // Duração em dias
@@ -452,9 +452,9 @@ model Challenge {
   
   // Resultados
   winnerId          String?
-  winner            User?    @relation("Winner", fields: [winnerId], references: [id])
+  winner            User?    @relation("Winner", fields: [winnerId], references: [id], onDelete: SetNull)
   loserId           String?
-  loser             User?    @relation("Loser", fields: [loserId], references: [id])
+  loser             User?    @relation("Loser", fields: [loserId], references: [id], onDelete: SetNull)
   
   challengerProfit  Float?   // Lucro do desafiante
   challengedProfit  Float?   // Lucro do desafiado
@@ -484,7 +484,7 @@ model ChallengeTrade {
   challenge       Challenge @relation(fields: [challengeId], references: [id])
   
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Informações do trade
   symbol          String
@@ -504,7 +504,7 @@ model ChallengeTrade {
 model Bot {
   id                String   @id @default(uuid())
   userId            String
-  user              User     @relation(fields: [userId], references: [id])
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Configurações básicas
   name              String
@@ -606,7 +606,7 @@ model Bot {
 model TokenTransaction {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Tipo de transação
   type            String   // 'challenge_created' | 'challenge_accepted' | 'challenge_rejected' | 'challenge_won' | 'challenge_lost' | 'challenge_refund' | 'purchase' | 'sale'
@@ -636,7 +636,7 @@ model TokenTransaction {
 model ChatMessage {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Conteúdo da mensagem
   text            String
@@ -656,7 +656,7 @@ model ChatMessage {
 model TesterRequest {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Descrição do teste e problema identificado
   description     String
@@ -689,7 +689,7 @@ model PlatformSettings {
 model BitcoinTransaction {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Quantidade de Super Créditos
   superCreditsAmount Int   // Quantidade de Super Créditos a serem creditados
@@ -717,7 +717,7 @@ model BitcoinTransaction {
 model ExpenseType {
   id          String   @id @default(uuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String   // Nome do tipo (ex: Mercado, Carro, Lazer)
   isDefault   Boolean  @default(false) // Para tipos padrão do sistema
   
@@ -732,7 +732,7 @@ model ExpenseType {
 model Backtest {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Configuração básica
   name            String   // Nome do backteste
