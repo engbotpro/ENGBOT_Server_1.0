@@ -153,7 +153,10 @@ export const register = async (
 
     // 4) Envia e-mail de confirmação (não bloqueia o cadastro se falhar)
     try {
-      await sendConfirmationEmail(email, token);
+      const protocol = (req.get("x-forwarded-proto") as string) || req.protocol || "https";
+      const host = req.get("x-forwarded-host") || req.get("host") || "";
+      const baseUrl = host ? `${protocol}://${host}` : undefined;
+      await sendConfirmationEmail(email, token, baseUrl);
     } catch (emailErr: any) {
       console.error("[register] Erro ao enviar e-mail de confirmação:", emailErr);
       // Usuário já foi criado; retorna sucesso com mensagem alternativa
@@ -444,7 +447,10 @@ export const resendConfirmationEmail = async (req: Request, res: Response) => {
     });
 
     try {
-      await sendConfirmationEmail(emailStr, token);
+      const protocol = (req.get("x-forwarded-proto") as string) || req.protocol || "https";
+      const host = req.get("x-forwarded-host") || req.get("host") || "";
+      const baseUrl = host ? `${protocol}://${host}` : undefined;
+      await sendConfirmationEmail(emailStr, token, baseUrl);
     } catch (emailErr: any) {
       console.error("[resendConfirmation] Erro ao enviar e-mail:", emailErr);
       return res.status(500).json({ error: "Não foi possível enviar o e-mail. Tente novamente mais tarde." });

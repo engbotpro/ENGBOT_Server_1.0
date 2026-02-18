@@ -14,12 +14,18 @@ const transporter = nodemailer.createTransport({
   secure: false,
 });
 
-export async function sendConfirmationEmail(email: string, token: string) {
+export async function sendConfirmationEmail(email: string, token: string, baseUrlOverride?: string) {
   if (!isSmtpConfigured()) {
     throw new Error("SMTP não configurado. Defina SMTP_HOST, SMTP_USER e SMTP_PASS no .env");
   }
-  const baseUrl = process.env.BACKEND_URL || process.env.API_URL || process.env.FRONTEND_URL || "http://localhost:5000";
-  const url = `${baseUrl}/auth/confirm?token=${encodeURIComponent(token)}`;
+  const baseUrl = baseUrlOverride ||
+    process.env.BACKEND_URL ||
+    process.env.SERVER_URL ||
+    process.env.API_URL ||
+    process.env.FRONTEND_URL ||
+    process.env.FRONT_ORIGIN ||
+    "http://localhost:5000";
+  const url = `${baseUrl.replace(/\/$/, "")}/auth/confirm?token=${encodeURIComponent(token)}`;
   await transporter.sendMail({
     from: process.env.SMTP_FROM || `"EngBot" <no-reply@engbot.com>`,
     to: email,
