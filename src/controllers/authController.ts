@@ -267,10 +267,9 @@ export const googleCallback = async (req: Request, res: Response) => {
 
     let redirectUrl: string;
     if (isMobile) {
-      // Página intermediária HTML que fecha o Custom Tab e passa o token ao app
-      const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
-      redirectUrl = `${serverUrl}/auth/google/mobile-done?googleToken=${encodeURIComponent(token)}`;
-      console.log('📱 Detectado mobile - redirecionando para página de conclusão');
+      // Redirecionar diretamente para o deep link - FlutterWebAuth2 captura e fecha o Custom Tab
+      redirectUrl = `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`;
+      console.log('📱 Detectado mobile - redirecionando para deep link');
     } else {
       // Redirect para web SPA
       redirectUrl = `${process.env.FRONT_ORIGIN}/login/google-redirect?googleToken=${encodeURIComponent(token)}`;
