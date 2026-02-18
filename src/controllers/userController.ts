@@ -154,8 +154,11 @@ export const register = async (
     // 4) Envia e-mail de confirmação (não bloqueia o cadastro se falhar)
     try {
       const protocol = (req.get("x-forwarded-proto") as string) || req.protocol || "https";
-      const host = req.get("x-forwarded-host") || req.get("host") || "";
-      const baseUrl = host ? `${protocol}://${host}` : undefined;
+      const host = (req.get("x-forwarded-host") || req.get("host") || "").split(":")[0];
+      // Se host for localhost, usar SERVER_URL (link do email deve ser acessível pelo usuário)
+      const baseUrl = host && !/^localhost$|^127\.0\.0\.1$/i.test(host)
+        ? `${protocol}://${req.get("x-forwarded-host") || req.get("host")}`
+        : (process.env.SERVER_URL || process.env.BACKEND_URL || process.env.API_URL) || undefined;
       await sendConfirmationEmail(email, token, baseUrl);
     } catch (emailErr: any) {
       console.error("[register] Erro ao enviar e-mail de confirmação:", emailErr);
@@ -448,8 +451,10 @@ export const resendConfirmationEmail = async (req: Request, res: Response) => {
 
     try {
       const protocol = (req.get("x-forwarded-proto") as string) || req.protocol || "https";
-      const host = req.get("x-forwarded-host") || req.get("host") || "";
-      const baseUrl = host ? `${protocol}://${host}` : undefined;
+      const host = (req.get("x-forwarded-host") || req.get("host") || "").split(":")[0];
+      const baseUrl = host && !/^localhost$|^127\.0\.0\.1$/i.test(host)
+        ? `${protocol}://${req.get("x-forwarded-host") || req.get("host")}`
+        : (process.env.SERVER_URL || process.env.BACKEND_URL || process.env.API_URL) || undefined;
       await sendConfirmationEmail(emailStr, token, baseUrl);
     } catch (emailErr: any) {
       console.error("[resendConfirmation] Erro ao enviar e-mail:", emailErr);

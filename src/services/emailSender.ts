@@ -24,7 +24,7 @@ export async function sendConfirmationEmail(email: string, token: string, baseUr
     process.env.API_URL ||
     process.env.FRONTEND_URL ||
     process.env.FRONT_ORIGIN ||
-    "http://localhost:5000";
+    "https://engbot-server-1-0-546289259263.southamerica-east1.run.app"; // fallback produção
   const url = `${baseUrl.replace(/\/$/, "")}/auth/confirm?token=${encodeURIComponent(token)}`;
   await transporter.sendMail({
     from: process.env.SMTP_FROM || `"EngBot" <no-reply@engbot.com>`,
