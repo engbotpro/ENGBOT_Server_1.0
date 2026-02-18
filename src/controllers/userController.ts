@@ -140,18 +140,30 @@ export const register = async (
       }
     });
 
-    // 2) Gera token JWT de confirmação
+    // 3) Cria carteira virtual inicial com $10.000
+    await prisma.wallet.create({
+      data: {
+        userId: user.id,
+        type: 'virtual',
+        symbol: 'USDT',
+        name: 'Tether USD',
+        balance: 10000,
+        value: 10000
+      }
+    });
+
+    // 4) Gera token JWT de confirmação
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
       expiresIn: "24h",
     });
 
-    // 3) Armazena token no usuário
+    // 5) Armazena token no usuário
     await prisma.user.update({
       where: { id: user.id },
       data: { confirmToken: token },
     });
 
-    // 4) Envia e-mail de confirmação (não bloqueia o cadastro se falhar)
+    // 6) Envia e-mail de confirmação (não bloqueia o cadastro se falhar)
     try {
       const protocol = (req.get("x-forwarded-proto") as string) || req.protocol || "https";
       const host = (req.get("x-forwarded-host") || req.get("host") || "").split(":")[0];
@@ -169,7 +181,7 @@ export const register = async (
       });
     }
 
-    // 5) Responde 201
+    // 7) Responde 201
     res
       .status(201)
       .json({ message: "Cadastro realizado. Confira seu e-mail para confirmar." });

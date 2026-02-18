@@ -40,7 +40,7 @@ router.get(
   googleCallback
 );
 
-/* --------- Página intermediária para mobile (fecha o Custom Tab e passa token ao app) --------- */
+/* --------- Redirect 302 puro para deep link (mobile) - Custom Tab segue e FlutterWebAuth2 captura --------- */
 router.get("/google/mobile-done", (req, res) => {
   const token = req.query.googleToken as string;
   if (!token) {
@@ -53,31 +53,7 @@ router.get("/google/mobile-done", (req, res) => {
     return;
   }
   const deepLink = `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`;
-  const escapedDeepLink = deepLink.replace(/"/g, "&quot;").replace(/</g, "\\u003c");
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Login realizado</title>
-  <style>
-    body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0a1419; color: #fff; padding: 20px; text-align: center; }
-    h2 { color: #39ff14; }
-    p { opacity: 0.9; }
-    .btn { display: inline-block; margin-top: 20px; padding: 16px 32px; background: #39ff14; color: #000; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 18px; }
-  </style>
-</head>
-<body>
-  <h2>Login realizado com sucesso!</h2>
-  <p>Toque no botão abaixo para retornar ao app.</p>
-  <a href="${escapedDeepLink}" class="btn">Retornar ao app</a>
-</body>
-</html>
-  `);
+  res.redirect(302, deepLink);
 });
 
 export default router;

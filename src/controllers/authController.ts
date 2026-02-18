@@ -267,9 +267,10 @@ export const googleCallback = async (req: Request, res: Response) => {
 
     let redirectUrl: string;
     if (isMobile) {
-      // Redirecionar diretamente para o deep link - FlutterWebAuth2 captura e fecha o Custom Tab
-      redirectUrl = `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`;
-      console.log('📱 Detectado mobile - redirecionando para deep link');
+      // Página intermediária faz 302 para o deep link (Custom Tab segue e app captura)
+      const serverUrl = process.env.SERVER_URL || 'https://engbot-server-1-0-546289259263.southamerica-east1.run.app';
+      redirectUrl = `${serverUrl}/auth/google/mobile-done?googleToken=${encodeURIComponent(token)}`;
+      console.log('📱 Detectado mobile - redirecionando para mobile-done');
     } else {
       // Redirect para web SPA
       redirectUrl = `${process.env.FRONT_ORIGIN}/login/google-redirect?googleToken=${encodeURIComponent(token)}`;
