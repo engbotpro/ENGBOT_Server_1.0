@@ -39,7 +39,18 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           where: { googleId: profile.id }
         });
         
-        if (!user) {
+        if (user) {
+          // Se encontrou por googleId, atualiza o nome se necessário
+          if (user.name !== profile.displayName || user.email !== email) {
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                name: profile.displayName,
+                email: email, // Atualiza email caso tenha mudado
+              }
+            });
+          }
+        } else {
           // Se não encontrou por googleId, tenta buscar/atualizar por email
           user = await prisma.user.upsert({
             where: { email },
@@ -55,62 +66,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
               active: true,
               perfil: "usuario"
             },
-          });
-        } else {
-          // Se encontrou por googleId, atualiza o nome se necessário
-          if (user.name !== profile.displayName || user.email !== email) {
-            user = await prisma.user.update({
-              where: { id: user.id },
-              data: {
-                name: profile.displayName,
-                email: email,
-              }
-            });
-          }
-        }
-
-        // Garantir UserChallengeStats e Wallet para qualquer usuário que não tenha
-        const hasStats = await prisma.userChallengeStats.findUnique({
-          where: { userId: user.id }
-        });
-        if (!hasStats) {
-          await prisma.userChallengeStats.create({
-            data: {
-              userId: user.id,
-              tokens: 1000,
-              totalWins: 0,
-              totalLosses: 0,
-              winRate: 0,
-              totalProfit: 0,
-              totalChallenges: 0,
-              activeChallenges: 0,
-              bestWinStreak: 0,
-              currentStreak: 0,
-              averageReturn: 0,
-              bestReturn: 0,
-              worstReturn: 0,
-              autoAccept: false,
-              minBetAmount: 10,
-              maxBetAmount: 500
-            }
-          });
-        }
-
-        const hasVirtualWallet = await prisma.wallet.findUnique({
-          where: {
-            userId_type_symbol: { userId: user.id, type: 'virtual', symbol: 'USDT' }
-          }
-        });
-        if (!hasVirtualWallet) {
-          await prisma.wallet.create({
-            data: {
-              userId: user.id,
-              type: 'virtual',
-              symbol: 'USDT',
-              name: 'Tether USD',
-              balance: 10000,
-              value: 10000
-            }
           });
         }
         

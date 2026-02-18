@@ -9,7 +9,7 @@ router.get("/stats", getDashboardStats);
 router.get("/:userId/plan-history", getUserPlanHistory);
 router.post("/", createUser);
 router.put("/:id", updateUser);
-router.delete("/:id", deleteUser as unknown as RequestHandler);
+router.delete("/:id", deleteUser as RequestHandler);
 
 // Rotas de termos (requerem autenticação)
 router.post("/terms/accept", authenticateToken, async (req, res) => {
