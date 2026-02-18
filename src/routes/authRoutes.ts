@@ -68,22 +68,13 @@ router.get("/google/mobile-done", (req, res) => {
     body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0a1419; color: #fff; padding: 20px; text-align: center; }
     h2 { color: #39ff14; }
     p { opacity: 0.9; }
-    a { display: inline-block; margin-top: 16px; padding: 14px 28px; background: #39ff14; color: #000; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
+    .btn { display: inline-block; margin-top: 20px; padding: 16px 32px; background: #39ff14; color: #000; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 18px; }
   </style>
 </head>
 <body>
   <h2>Login realizado com sucesso!</h2>
-  <p>Retornando ao app...</p>
-  <p style="font-size:12px;opacity:0.6;">Se a janela não fechar automaticamente, toque no botão abaixo.</p>
-  <a href="${escapedDeepLink}" id="backBtn">Retornar ao app</a>
-  <script>
-    (function() {
-      var dl = ${JSON.stringify(deepLink)};
-      setTimeout(function() {
-        window.location.href = dl;
-      }, 500);
-    })();
-  </script>
+  <p>Toque no botão abaixo para retornar ao app.</p>
+  <a href="${escapedDeepLink}" class="btn">Retornar ao app</a>
 </body>
 </html>
   `);
