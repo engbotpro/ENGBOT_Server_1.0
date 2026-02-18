@@ -40,7 +40,7 @@ router.get(
   googleCallback
 );
 
-/* --------- Página intermediária para mobile (fecha o Custom Tab e passa token ao app) --------- */
+/* --------- Página intermediária para mobile (Custom Tab → app via deep link) --------- */
 router.get("/google/mobile-done", (req, res) => {
   const token = req.query.googleToken as string;
   if (!token) {
@@ -52,8 +52,9 @@ router.get("/google/mobile-done", (req, res) => {
     `);
     return;
   }
-  const deepLink = `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`;
-  const escapedDeepLink = deepLink.replace(/"/g, "&quot;").replace(/</g, "\\u003c");
+  // Intent URL: formato que o Android trata melhor ao abrir app a partir do navegador
+  const intentUrl = `intent://login-callback?googleToken=${encodeURIComponent(token)}#Intent;scheme=engbotmobile;package=com.engbot.app;end`;
+  const escapedIntentUrl = intentUrl.replace(/"/g, "&quot;").replace(/</g, "\\u003c");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.send(`
@@ -65,25 +66,21 @@ router.get("/google/mobile-done", (req, res) => {
   <meta name="robots" content="noindex, nofollow">
   <title>Login realizado</title>
   <style>
-    body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0a1419; color: #fff; padding: 20px; text-align: center; }
-    h2 { color: #39ff14; }
-    p { opacity: 0.9; }
-    a { display: inline-block; margin-top: 16px; padding: 14px 28px; background: #39ff14; color: #000; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0a1419; color: #fff; padding: 24px; text-align: center; }
+    a { display: block; width: 100%; height: 100%; position: fixed; top: 0; left: 0; text-decoration: none; color: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    h2 { color: #39ff14; margin: 0 0 12px 0; }
+    p { opacity: 0.9; margin: 8px 0; }
+    .btn { display: inline-block; margin-top: 24px; padding: 16px 32px; background: #39ff14; color: #000; border-radius: 8px; font-weight: 600; font-size: 18px; position: relative; z-index: 1; }
   </style>
 </head>
 <body>
-  <h2>Login realizado com sucesso!</h2>
-  <p>Retornando ao app...</p>
-  <p style="font-size:12px;opacity:0.6;">Se a janela não fechar automaticamente, toque no botão abaixo.</p>
-  <a href="${escapedDeepLink}" id="backBtn">Retornar ao app</a>
-  <script>
-    (function() {
-      var dl = ${JSON.stringify(deepLink)};
-      setTimeout(function() {
-        window.location.href = dl;
-      }, 500);
-    })();
-  </script>
+  <a href="${escapedIntentUrl}" id="openApp">
+    <h2>Login realizado com sucesso!</h2>
+    <p>Toque em qualquer lugar para abrir o aplicativo</p>
+    <span class="btn">Abrir EngBot</span>
+  </a>
 </body>
 </html>
   `);
