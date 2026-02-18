@@ -19,10 +19,6 @@ router.get("/confirm", async (req, res) => {
 
 /* --------- Google ID Token (mobile - google_sign_in) --------- */
 router.post("/google/token", googleTokenLogin);
-router.get("/google/client-id", (_req, res) => {
-  const id = process.env.GOOGLE_CLIENT_ID;
-  res.json({ clientId: id || "" });
-});
 
 /* --------- OAuth Google --------- */
 router.get(

@@ -216,17 +216,21 @@ export const googleTokenLogin = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      console.error("GOOGLE_CLIENT_ID não configurado");
+    const webClientId = process.env.GOOGLE_CLIENT_ID;
+    const androidClientId = process.env.GOOGLE_ANDROID_CLIENT_ID;
+    const audiences: string[] = [];
+    if (webClientId) audiences.push(webClientId);
+    if (androidClientId) audiences.push(androidClientId);
+    if (audiences.length === 0) {
+      console.error("GOOGLE_CLIENT_ID ou GOOGLE_ANDROID_CLIENT_ID não configurado");
       res.status(500).json({ error: "Login com Google não configurado" });
       return;
     }
 
-    const client = new OAuth2Client(clientId);
+    const client = new OAuth2Client();
     const ticket = await client.verifyIdToken({
       idToken,
-      audience: clientId,
+      audience: audiences,
     });
     const payload = ticket.getPayload();
     if (!payload || !payload.email || !payload.sub) {
