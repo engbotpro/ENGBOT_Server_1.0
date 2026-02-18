@@ -286,14 +286,62 @@ export const updateUser = async (req: Request, res: Response) => {
   }
 };
 
-// 🔹 Excluir usuário
+// 🔹 Excluir usuário (com remoção em cascata dos dados associados)
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await prisma.user.delete({ where: { id } });
+
+    await prisma.$transaction(async (tx) => {
+      // Remover registros que referenciam o usuário (ordem respeitando FKs)
+      await tx.challengeTrade.deleteMany({ where: { userId: id } });
+      await tx.tokenTransaction.deleteMany({ where: { userId: id } });
+      await tx.challenge.deleteMany({
+        where: {
+          OR: [
+            { challengerId: id },
+            { challengedId: id },
+            { winnerId: id },
+            { loserId: id },
+          ],
+        },
+      });
+      await tx.trade.deleteMany({ where: { userId: id } });
+      await tx.pendingOrder.deleteMany({ where: { userId: id } });
+      await tx.backtest.deleteMany({ where: { userId: id } });
+      await tx.capitalSimulationInvestment.deleteMany({ where: { userId: id } });
+      await tx.capitalInvestment.deleteMany({ where: { userId: id } });
+      await tx.expenseType.deleteMany({ where: { userId: id } });
+      await tx.bitcoinTransaction.deleteMany({ where: { userId: id } });
+      await tx.testerRequest.deleteMany({ where: { userId: id } });
+      await tx.chatMessage.deleteMany({ where: { userId: id } });
+      await tx.userFeedback.deleteMany({ where: { userId: id } });
+      await tx.bot.deleteMany({ where: { userId: id } });
+      await tx.wallet.deleteMany({ where: { userId: id } });
+      await tx.userChallengeStats.deleteMany({ where: { userId: id } });
+      await tx.planHistory.deleteMany({ where: { userId: id } });
+      await tx.pixTransaction.deleteMany({ where: { userId: id } });
+      await tx.paymentTransaction.deleteMany({ where: { userId: id } });
+      await tx.technicalIndicator.deleteMany({ where: { userId: id } });
+      await tx.spendingPlan.deleteMany({ where: { userId: id } });
+      await tx.financialIndependence.deleteMany({ where: { userId: id } });
+      await tx.compoundInterest.deleteMany({ where: { userId: id } });
+
+      await tx.user.delete({ where: { id } });
+    });
+
     res.json({ message: "Usuário deletado com sucesso" });
-  } catch (error) {
-    res.status(400).json({ error: "Erro ao deletar usuário" });
+  } catch (error: any) {
+    console.error("[deleteUser] Erro:", error);
+    const code = error?.code;
+    if (code === "P2025") {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+    if (code === "P2003") {
+      return res.status(400).json({
+        error: "Não é possível excluir: o usuário possui dados associados. Desative o usuário em vez de excluí-lo.",
+      });
+    }
+    res.status(400).json({ error: "Erro ao deletar usuário." });
   }
 };
 
