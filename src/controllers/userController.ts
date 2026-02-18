@@ -288,12 +288,17 @@ export const updateUser = async (req: Request, res: Response) => {
 
 // 🔹 Excluir usuário (CASCADE no banco remove dados associados)
 export const deleteUser = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  console.log("[deleteUser] Iniciando exclusão do usuário:", id);
   try {
-    const { id } = req.params;
     await prisma.user.delete({ where: { id } });
+    console.log("[deleteUser] Usuário deletado com sucesso:", id);
     res.json({ message: "Usuário deletado com sucesso" });
   } catch (error: any) {
-    console.error("[deleteUser] Erro:", error);
+    console.error("[deleteUser] Erro completo:", JSON.stringify(error, null, 2));
+    console.error("[deleteUser] error.code:", error?.code);
+    console.error("[deleteUser] error.message:", error?.message);
+    console.error("[deleteUser] error.meta:", error?.meta);
     const code = error?.code;
     if (code === "P2025") {
       return res.status(404).json({ error: "Usuário não encontrado." });
@@ -303,7 +308,11 @@ export const deleteUser = async (req: Request, res: Response) => {
         error: "Não é possível excluir: o usuário possui dados associados. Desative o usuário em vez de excluí-lo.",
       });
     }
-    res.status(400).json({ error: "Erro ao deletar usuário." });
+    // Incluir detalhes do erro na resposta para debug
+    res.status(400).json({
+      error: "Erro ao deletar usuário.",
+      _debug: { code: error?.code, message: error?.message },
+    });
   }
 };
 
