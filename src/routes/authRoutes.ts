@@ -40,20 +40,14 @@ router.get(
   googleCallback
 );
 
-/* --------- Redirect para mobile: 302 direto ao deep link (Auth Tab v5+ captura e fecha automaticamente) --------- */
+/* --------- Redirect 302: Auth Tab (v5+) captura e fecha automaticamente --------- */
 router.get("/google/mobile-done", (req, res) => {
   const token = req.query.googleToken as string;
   if (!token) {
-    res.status(400).send(`
-      <html><body style="font-family:sans-serif;padding:20px;text-align:center;">
-        <h2>Erro</h2>
-        <p>Token não recebido. Tente fazer login novamente.</p>
-      </body></html>
-    `);
+    res.status(400).send(`<html><body><h2>Erro</h2><p>Token não recebido.</p></body></html>`);
     return;
   }
-  const deepLink = `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`;
-  res.redirect(302, deepLink);
+  res.redirect(302, `engbotmobile://login-callback?googleToken=${encodeURIComponent(token)}`);
 });
 
 export default router;
