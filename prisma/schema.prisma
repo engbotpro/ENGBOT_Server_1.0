@@ -547,11 +547,11 @@ model Bot {
   
   // Stop Loss e Take Profit
   stopLossEnabled   Boolean  @default(false)
-  stopLossType      String   // 'fixed' | 'trailing' | 'atr'
+  stopLossType      String   // 'fixed' | 'price' | 'trailing' | 'atr'
   stopLossValue     Float?
   
   takeProfitEnabled Boolean  @default(false)
-  takeProfitType    String   // 'trailing' | 'fixed' | 'atr'
+  takeProfitType    String   // 'fixed' | 'price' | 'trailing' | 'atr'
   takeProfitValue   Float?
   
   // Gerenciamento de risco

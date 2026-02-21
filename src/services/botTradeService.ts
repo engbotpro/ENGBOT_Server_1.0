@@ -1755,11 +1755,16 @@ export class BotTradeService {
   }
 
   /**
-   * Calcula stop loss
+   * Calcula stop loss.
+   * - fixed: value é percentual (ex: 2 = 2%)
+   * - price: value é o preço em USDT (ex: 95000)
    */
   private static calculateStopLoss(price: number, side: 'buy' | 'sell', value: number, type: string): number | null {
+    if (type === 'price') {
+      return value;
+    }
     if (type === 'fixed') {
-      return side === 'buy' 
+      return side === 'buy'
         ? price * (1 - value / 100)
         : price * (1 + value / 100);
     }
@@ -1767,9 +1772,14 @@ export class BotTradeService {
   }
 
   /**
-   * Calcula take profit
+   * Calcula take profit.
+   * - fixed: value é percentual (ex: 4 = 4%)
+   * - price: value é o preço em USDT (ex: 105000)
    */
   private static calculateTakeProfit(price: number, side: 'buy' | 'sell', value: number, type: string): number | null {
+    if (type === 'price') {
+      return value;
+    }
     if (type === 'fixed') {
       return side === 'buy'
         ? price * (1 + value / 100)
