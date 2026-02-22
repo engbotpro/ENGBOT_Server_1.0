@@ -40,3 +40,35 @@ export async function sendConfirmationEmail(email: string, token: string, baseUr
     `,
   });
 }
+
+/** E-mail de recuperação de senha: link e código para usar no app */
+export async function sendPasswordResetEmail(
+  email: string,
+  token: string,
+  baseUrlOverride?: string
+) {
+  if (!isSmtpConfigured()) {
+    throw new Error("SMTP não configurado. Defina SMTP_HOST, SMTP_USER e SMTP_PASS no .env");
+  }
+  const baseUrl =
+    baseUrlOverride ||
+    process.env.BACKEND_URL ||
+    process.env.SERVER_URL ||
+    process.env.FRONT_ORIGIN ||
+    "https://engbot-server-1-0-546289259263.southamerica-east1.run.app";
+  const resetUrl = `${baseUrl.replace(/\/$/, "")}/auth/reset-password-page?token=${encodeURIComponent(token)}`;
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || `"EngBot" <no-reply@engbot.com>`,
+    to: email,
+    subject: "Recuperação de senha - EngBot",
+    html: `
+      <p>Olá!</p>
+      <p>Você solicitou a redefinição de senha. Use uma das opções abaixo:</p>
+      <p><strong>Opção 1:</strong> <a href="${resetUrl}" style="color:#39FF14;">Clique aqui para redefinir sua senha</a></p>
+      <p><strong>Opção 2:</strong> No app, vá em "Redefinir senha" e informe este código:</p>
+      <p style="font-size:18px;letter-spacing:4px;font-family:monospace;">${token}</p>
+      <p>Este link/código expira em 1 hora.</p>
+      <p>Se você não solicitou isso, ignore este e-mail.</p>
+    `,
+  });
+}

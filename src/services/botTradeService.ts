@@ -78,7 +78,7 @@ export class BotTradeService {
               // Parar o robô automaticamente se não tiver saldo suficiente
               await prisma.bot.update({
                 where: { id: bot.id },
-                data: { isActive: false }
+                data: { isActive: false, deactivationReason: 'Saldo insuficiente para operar' }
               });
               
               console.log(`🛑 Robô ${bot.name} parado automaticamente por falta de saldo`);
@@ -274,7 +274,7 @@ export class BotTradeService {
         // Parar o robô automaticamente se não tiver saldo suficiente
         await prisma.bot.update({
           where: { id: bot.id },
-          data: { isActive: false }
+          data: { isActive: false, deactivationReason: 'Saldo insuficiente para operar' }
         });
         
         console.log(`🛑 Robô ${bot.name} parado automaticamente por falta de saldo`);

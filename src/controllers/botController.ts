@@ -275,7 +275,7 @@ export const deleteBot = async (req: Request, res: Response) => {
 export const toggleBotActive = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { isActive } = req.body;
+    const { isActive, deactivationReason } = req.body;
     const userId = getUserId(req);
 
     if (!userId) {
@@ -315,9 +315,16 @@ export const toggleBotActive = async (req: Request, res: Response) => {
       }
     }
 
+    const updateData: { isActive: boolean; deactivationReason?: string | null } = { isActive };
+    if (isActive === false && deactivationReason != null) {
+      updateData.deactivationReason = String(deactivationReason).trim() || null;
+    } else if (isActive === true) {
+      updateData.deactivationReason = null;
+    }
+
     const bot = await prisma.bot.update({
       where: { id },
-      data: { isActive }
+      data: updateData
     });
 
     res.json(bot);

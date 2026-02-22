@@ -23,7 +23,9 @@ model User {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   confirmed           Boolean  @default(false)    // ← novo campo
-  confirmToken        String? 
+  confirmToken        String?
+  passwordResetToken  String?
+  passwordResetExpires DateTime? 
 
   // Aceite de termos de uso
   termsAccepted       Boolean  @default(false)    // Se o usuário aceitou os termos
@@ -512,6 +514,7 @@ model Bot {
   symbol            String
   timeframe         String   @default("1h") // Tempo gráfico (ex: '1m', '5m', '15m', '1h', '4h', '1d')
   isActive          Boolean  @default(false)
+  deactivationReason String? // Motivo da interrupção (ex: "Pausado pelo usuário", "Saldo insuficiente")
   startDate         DateTime
   endDate           DateTime? // Data de término (opcional)
   

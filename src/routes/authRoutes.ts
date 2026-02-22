@@ -1,5 +1,5 @@
 import { Router, RequestHandler } from "express";
-import { login, firstAccess, changePassword, googleCallback } from "../controllers/authController";
+import { login, firstAccess, changePassword, forgotPassword, resetPassword, resetPasswordPage, googleCallback } from "../controllers/authController";
 import { register as registerHandler, confirmEmail, resendConfirmationEmail } from "../controllers/userController";
 import passport from "passport";
 
@@ -11,6 +11,11 @@ router.put("/changepassword", firstAccess);
 router.put("/changepasswordAlt", changePassword);
 router.post("/register", registerHandler as RequestHandler);
 router.post("/resend-confirmation", resendConfirmationEmail as RequestHandler);
+
+/* --------- recuperação de senha --------- */
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
+router.get("/reset-password-page", resetPasswordPage);
 
 /* --------- confirmação de e-mail (link do e-mail) --------- */
 router.get("/confirm", async (req, res) => {

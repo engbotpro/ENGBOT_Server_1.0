@@ -3,6 +3,7 @@ import prisma from "../prismaClient";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import 'dotenv/config';
+import { sendPasswordResetEmail } from "../services/emailSender";
 
 
 
@@ -205,6 +206,156 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
   }
 };
 
+
+// 🔹 Esqueci a senha: envia e-mail com link e código para redefinir
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body || {};
+    const emailStr = (email || "").trim().toLowerCase();
+    if (!emailStr) {
+      res.status(400).json({ error: "E-mail é obrigatório." });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: emailStr } });
+    if (!user) {
+      // Não revelar se o e-mail existe ou não (segurança)
+      res.status(200).json({ message: "Se existir uma conta com este e-mail, você receberá um link para redefinir sua senha." });
+      return;
+    }
+    if (!user.password) {
+      res.status(200).json({ message: "Se existir uma conta com este e-mail, você receberá um link para redefinir sua senha." });
+      return;
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, purpose: "password-reset" },
+      process.env.JWT_SECRET!,
+      { expiresIn: "1h" }
+    );
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordResetToken: token, passwordResetExpires: expiresAt },
+    });
+
+    try {
+      const protocol = (req.get("x-forwarded-proto") as string) || req.protocol || "https";
+      const host = (req.get("x-forwarded-host") || req.get("host") || "").split(":")[0];
+      const baseUrl =
+        host && !/^localhost$|^127\.0\.0\.1$/i.test(host)
+          ? `${protocol}://${req.get("x-forwarded-host") || req.get("host")}`
+          : process.env.SERVER_URL || process.env.BACKEND_URL || process.env.API_URL || undefined;
+      await sendPasswordResetEmail(emailStr, token, baseUrl);
+    } catch (emailErr: unknown) {
+      console.error("[forgotPassword] Erro ao enviar e-mail:", emailErr);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetToken: null, passwordResetExpires: null },
+      });
+      res.status(500).json({ error: "Não foi possível enviar o e-mail. Tente novamente mais tarde." });
+      return;
+    }
+
+    res.status(200).json({ message: "Se existir uma conta com este e-mail, você receberá um link para redefinir sua senha." });
+  } catch (err) {
+    console.error("[forgotPassword] erro:", err);
+    res.status(500).json({ error: "Erro ao processar solicitação." });
+  }
+};
+
+// 🔹 Redefinir senha com token (recebido por e-mail)
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, newPassword } = req.body || {};
+    if (!token || typeof token !== "string") {
+      res.status(400).json({ error: "Token é obrigatório." });
+      return;
+    }
+    if (!newPassword || (typeof newPassword === "string" && newPassword.length < 8)) {
+      res.status(400).json({ error: "A nova senha deve ter no mínimo 8 caracteres." });
+      return;
+    }
+    const newPasswordStr = String(newPassword).trim();
+
+    let payload: { userId: string; purpose?: string };
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string; purpose?: string };
+    } catch {
+      res.status(400).json({ error: "Token inválido ou expirado. Solicite um novo e-mail de recuperação." });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, passwordResetToken: true, passwordResetExpires: true, password: true },
+    });
+    if (!user || user.passwordResetToken !== token) {
+      res.status(400).json({ error: "Token inválido ou expirado. Solicite um novo e-mail de recuperação." });
+      return;
+    }
+    if (user.passwordResetExpires && user.passwordResetExpires < new Date()) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetToken: null, passwordResetExpires: null },
+      });
+      res.status(400).json({ error: "Token expirado. Solicite um novo e-mail de recuperação." });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPasswordStr, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword, passwordResetToken: null, passwordResetExpires: null },
+    });
+
+    res.status(200).json({ message: "Senha redefinida com sucesso. Faça login com a nova senha." });
+  } catch (err) {
+    console.error("[resetPassword] erro:", err);
+    res.status(500).json({ error: "Erro ao redefinir senha." });
+  }
+};
+
+// Página HTML para redefinir senha (link do e-mail)
+export const resetPasswordPage = async (req: Request, res: Response): Promise<void> => {
+  const token = (req.query.token as string) || "";
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Redefinir senha - EngBot</title></head>
+<body style="font-family:sans-serif;background:#0A1419;color:#eee;padding:40px;max-width:400px;margin:0 auto;">
+  <h1 style="color:#39FF14;">Redefinir senha</h1>
+  <form id="f" action="" method="post" style="display:block;">
+    <input type="hidden" name="token" value="${token.replace(/"/g, "&quot;")}" />
+    <p><label>Nova senha (mín. 8 caracteres):</label><br/>
+    <input type="password" name="newPassword" required minlength="8" style="width:100%;padding:8px;margin-top:4px;box-sizing:border-box;" /></p>
+    <p><label>Confirmar senha:</label><br/>
+    <input type="password" name="confirmPassword" required minlength="8" style="width:100%;padding:8px;margin-top:4px;box-sizing:border-box;" /></p>
+    <button type="submit" style="background:#39FF14;color:#0A1419;border:none;padding:12px 24px;cursor:pointer;font-weight:bold;">Redefinir senha</button>
+  </form>
+  <p id="msg" style="margin-top:16px;"></p>
+  <script>
+    document.getElementById("f").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var form = e.target;
+      var newPassword = form.newPassword.value;
+      var confirmPassword = form.confirmPassword.value;
+      if (newPassword !== confirmPassword) { document.getElementById("msg").textContent = "As senhas não coincidem."; document.getElementById("msg").style.color = "#f44"; return; }
+      if (newPassword.length < 8) { document.getElementById("msg").textContent = "A senha deve ter no mínimo 8 caracteres."; document.getElementById("msg").style.color = "#f44"; return; }
+      var msg = document.getElementById("msg");
+      fetch(window.location.origin + "/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: form.token.value, newPassword: newPassword })
+      }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(x) {
+          if (x.ok) { msg.style.color = "#39FF14"; msg.textContent = x.data.message || "Senha redefinida! Você já pode fazer login no app."; form.style.display = "none"; }
+          else { msg.style.color = "#f44"; msg.textContent = x.data.error || "Erro ao redefinir senha."; }
+        }).catch(function() { msg.style.color = "#f44"; msg.textContent = "Erro de conexão. Tente novamente."; });
+    });
+  </script>
+</body></html>`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.status(200).send(html);
+};
 
 export const googleCallback = async (req: Request, res: Response) => {
   console.log('🔄 Google callback iniciado');
