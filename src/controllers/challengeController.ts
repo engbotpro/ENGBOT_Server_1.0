@@ -52,6 +52,14 @@ const recordTokenTransaction = async (
   }
 };
 
+// Constrói o momento (UTC) de início a partir de startDate + startTime (enviados em UTC pelo cliente)
+const getStartDateTimeUtc = (startDate: Date, startTime: string): Date => {
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const startDateStr = startDate.toISOString().split('T')[0]; // YYYY-MM-DD em UTC
+  const [year, month, day] = startDateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0));
+};
+
 // Função utilitária para verificar se um desafio expirou
 const isChallengeExpired = (
   endDate: Date,
@@ -61,33 +69,21 @@ const isChallengeExpired = (
 ): boolean => {
   const now = new Date();
 
-  // Montar DateTime de início (se fornecido)
-  let startDateTime: Date | null = null;
+  // Montar DateTime de início em UTC (se fornecido)
   if (startDate && startTime) {
-    const [sH, sM] = startTime.split(":" ).map(Number);
-    
-    // Usar a data local para evitar problemas de fuso horário
-    const startDateStr = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    const [sYear, sMonth, sDay] = startDateStr.split('-').map(Number);
-    
-    startDateTime = new Date(sYear, sMonth - 1, sDay, sH, sM, 0, 0);
-    // Se ainda não chegou (considerando 1-minuto de tolerância) o desafio NÃO está expirado
+    const startDateTime = getStartDateTimeUtc(startDate, startTime);
     const startTolerance = 60_000; // 1 min
     if (now.getTime() + startTolerance < startDateTime.getTime()) {
       return false;
     }
   }
 
-  // Montar DateTime de fim
+  // Montar DateTime de fim em UTC
   const [eH, eM] = endTime.split(":" ).map(Number);
-  
-  // Usar a data local para evitar problemas de fuso horário
-  const endDateStr = endDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  const endDateStr = endDate.toISOString().split('T')[0];
   const [year, month, day] = endDateStr.split('-').map(Number);
-  
-  const endDateTime = new Date(year, month - 1, day, eH, eM, 0, 0);
+  const endDateTime = new Date(Date.UTC(year, month - 1, day, eH, eM, 0, 0));
 
-  // Buffer final de 30 segundos para atrasos de rede
   const endBuffer = 30_000;
   return now.getTime() > endDateTime.getTime() + endBuffer;
 };
@@ -238,15 +234,12 @@ const expirePendingChallenges = async (): Promise<void> => {
     });
 
     for (const challenge of pendingChallenges) {
-      // Verificar se o horário de início já passou
+      // Verificar se o horário de início já passou (em UTC; cliente envia data/hora em UTC)
       if (challenge.startDate && challenge.startTime) {
-        const [hours, minutes] = challenge.startTime.split(':').map(Number);
-        const startDateStr = challenge.startDate.toISOString().split('T')[0];
-        const [year, month, day] = startDateStr.split('-').map(Number);
-        const startDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
-        
-        // Se o horário de início já passou (exatamente quando vira o horário), cancelar o desafio
-        if (now.getTime() >= startDateTime.getTime()) {
+        const startDateTime = getStartDateTimeUtc(challenge.startDate, challenge.startTime);
+        // Só cancelar se o início já passou há mais de 2 minutos (evita cancelar no mesmo dia por fuso)
+        const graceMs = 2 * 60 * 1000;
+        if (now.getTime() >= startDateTime.getTime() + graceMs) {
           // Devolver tokens ao desafiante
           await prisma.userChallengeStats.update({
             where: { userId: challenge.challengerId },
@@ -1383,14 +1376,9 @@ export const respondToChallenge = async (req: Request, res: Response): Promise<v
       console.log(`⏰ Início: ${startDate.toISOString()}`);
       console.log(`⏰ Fim: ${endDate.toISOString()}`);
     } else {
-      // Para duelo de robôs: verificar se já chegou o horário de início
+      // Para duelo de robôs: verificar se já chegou o horário de início (UTC)
       const now = new Date();
-      const [hours, minutes] = challenge.startTime.split(':').map(Number);
-      
-      // Criar a data de início corretamente, evitando problemas de fuso horário
-      const startDateStr = challenge.startDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      const [sYear, sMonth, sDay] = startDateStr.split('-').map(Number);
-      const startDateTime = new Date(sYear, sMonth - 1, sDay, hours, minutes, 0, 0);
+      const startDateTime = getStartDateTimeUtc(challenge.startDate, challenge.startTime);
       
       // Verificar se o desafio já expirou mesmo antes de começar
       if (isChallengeExpired(challenge.endDate, challenge.endTime, challenge.startDate, challenge.startTime)) {
@@ -1398,7 +1386,7 @@ export const respondToChallenge = async (req: Request, res: Response): Promise<v
         return;
       }
       
-      const isStartTimeReached = now >= startDateTime;
+      const isStartTimeReached = now.getTime() >= startDateTime.getTime();
       newStatus = isStartTimeReached ? 'active' : 'waiting_start';
       
       startDate = new Date(challenge.startDate);
@@ -2575,10 +2563,7 @@ export const checkAndActivateWaitingChallenges = async (): Promise<void> => {
     });
 
     for (const challenge of waitingChallenges) {
-      const [hours, minutes] = challenge.startTime.split(':').map(Number);
-      
-      // Criar a data de início corretamente, evitando problemas de fuso horário
-      const startDateTime = new Date(challenge.startDate.getFullYear(), challenge.startDate.getMonth(), challenge.startDate.getDate(), hours, minutes, 0, 0);
+      const startDateTime = getStartDateTimeUtc(challenge.startDate, challenge.startTime);
       
       // Verificar se o desafio já expirou
       if (isChallengeExpired(challenge.endDate, challenge.endTime, challenge.startDate, challenge.startTime)) {
@@ -2592,7 +2577,7 @@ export const checkAndActivateWaitingChallenges = async (): Promise<void> => {
       }
       
       // Se chegou o horário de início, ativar o desafio
-      if (now >= startDateTime) {
+      if (now.getTime() >= startDateTime.getTime()) {
         await prisma.challenge.update({
           where: { id: challenge.id },
           data: { status: 'active' }
