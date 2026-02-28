@@ -1067,6 +1067,8 @@ export const getUserChallenges = async (req: Request, res: Response): Promise<vo
           challengedCurrentReturn: challenge.challengedCurrentReturn,
           challengerBotId: challenge.challengerBotId,
           challengedBotId: challenge.challengedBotId,
+          winnerId: challenge.winnerId,
+          loserId: challenge.loserId,
           createdAt: challenge.createdAt,
           updatedAt: challenge.updatedAt
         };
