@@ -36,14 +36,28 @@ router.get(
     })(req, res, next);
   }
 );
-router.get(
-  "/google/callback",
+router.get("/google/callback", (req, res, next) => {
+  const frontOrigin = process.env.FRONT_ORIGIN || process.env.SERVER_URL || 'http://localhost:5173';
   passport.authenticate("google", {
     session: false,
-    failureRedirect: `${process.env.FRONT_ORIGIN}/login`,
-  }),
-  googleCallback
-);
+    failureRedirect: `${frontOrigin}/login?error=auth_failed`,
+  }, async (err: any, user: any) => {
+    if (err) {
+      console.error('❌ Passport Google auth error:', err);
+      return res.redirect(`${frontOrigin}/login?error=auth_failed`);
+    }
+    if (!user) {
+      return res.redirect(`${frontOrigin}/login?error=no_user`);
+    }
+    req.user = user;
+    try {
+      await googleCallback(req, res);
+    } catch (e) {
+      console.error('❌ Google callback error:', e);
+      res.redirect(`${frontOrigin}/login?error=token_error`);
+    }
+  })(req, res, next);
+});
 
 /* --------- Redirect 302: Auth Tab (v5+) captura e fecha automaticamente --------- */
 router.get("/google/mobile-done", (req, res) => {

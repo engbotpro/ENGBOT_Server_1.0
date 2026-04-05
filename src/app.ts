@@ -28,6 +28,7 @@ import backtestRoutes from "./routes/backtestRoutes";
 import capitalInvestmentRoutes from "./routes/capitalInvestmentRoutes";
 import capitalSimulationInvestmentRoutes from "./routes/capitalSimulationInvestmentRoutes";
 import userFeedbackRoutes from "./routes/userFeedbackRoutes";
+import binanceApiKeyRoutes from "./routes/binanceApiKeyRoutes";
 import { authenticateToken } from "./middleware/authMiddleware";
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -209,6 +210,7 @@ async function bootstrap() {
     app.use("/api/capital-investments", capitalInvestmentRoutes);
     app.use("/api/capital-simulation-investments", capitalSimulationInvestmentRoutes);
     app.use("/api/feedback", userFeedbackRoutes);
+    app.use("/api/binance-keys", binanceApiKeyRoutes);
 
     /* ─────────── Tratamento global de erros (evita ERR_EMPTY_RESPONSE) ─────────── */
     app.use((_req, res) => {

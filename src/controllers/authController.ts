@@ -432,9 +432,11 @@ export const googleCallback = async (req: Request, res: Response) => {
     console.log('🔄 Redirecionando para:', redirectUrl);
     
   } catch (error) {
-    
-    console.error('❌ Erro ao gerar token JWT:', error);
-    res.redirect(`${process.env.FRONT_ORIGIN}/login?error=token_error`);
+    const frontOrigin = process.env.FRONT_ORIGIN || process.env.SERVER_URL || 'http://localhost:5173';
+    console.error('❌ Erro no Google callback:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Detalhes:', errMsg);
+    res.redirect(`${frontOrigin}/login?error=token_error`);
   }
 };
 

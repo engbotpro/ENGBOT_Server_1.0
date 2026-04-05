@@ -1,0 +1,58 @@
+# EngBot - Produção na EC2
+# Usa imagem publicada no Docker Hub (não faz build local)
+# Substitua SEU_USUARIO_DOCKERHUB pelo seu usuário do Docker Hub
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: engbot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: engbot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-engbot_password}
+      POSTGRES_DB: engbot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U engbot -d engbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: marcelosouzams/engbot-server:latest
+    container_name: engbot-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://engbot:engbot_password@db:5432/engbot}
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_ANDROID_CLIENT_ID: ${GOOGLE_ANDROID_CLIENT_ID:-}
+      SERVER_URL: ${SERVER_URL:-}
+      FRONT_ORIGIN: ${FRONT_ORIGIN:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
