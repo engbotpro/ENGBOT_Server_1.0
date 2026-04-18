@@ -14,6 +14,13 @@ echo "🔄 Baixando nova imagem do Docker Hub..."
 docker pull $(grep 'image:' "$COMPOSE_FILE" | grep engbot-server | awk '{print $2}')
 
 echo "🚀 Reiniciando containers..."
-docker compose -f docker-compose.prod.yml up -d --force-recreate
+if command -v docker-compose >/dev/null 2>&1; then
+  docker-compose -f docker-compose.prod.yml up -d --force-recreate
+elif docker compose version >/dev/null 2>&1; then
+  docker compose -f docker-compose.prod.yml up -d --force-recreate
+else
+  echo "❌ Instale docker-compose ou o plugin docker compose"
+  exit 1
+fi
 
 echo "✅ Atualização concluída!"

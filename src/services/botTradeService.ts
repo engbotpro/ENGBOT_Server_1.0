@@ -625,6 +625,40 @@ export class BotTradeService {
         }
       }
     } else if (primaryIndicatorName === 'sma' || primaryIndicatorName === 'ema' || primaryIndicatorName === 'wma' || primaryIndicatorName === 'hma') {
+      // Distância mínima % do preço em relação à média (entryValue = percentual, ex.: 1.5 = 1,5%)
+      const stretchPct =
+        bot.entryValue != null && !Number.isNaN(Number(bot.entryValue)) && Number(bot.entryValue) > 0
+          ? Number(bot.entryValue) / 100
+          : 0;
+      const safePrimary = Math.abs(primaryValue) > 1e-12 ? primaryValue : 1e-12;
+
+      const isStretchMa =
+        condition === 'ma_stretch_below_buy' ||
+        condition === 'ma_stretch_above_buy' ||
+        condition === 'ma_stretch_above_sell' ||
+        condition === 'ma_stretch_below_sell';
+
+      if (isStretchMa) {
+        if (condition === 'ma_stretch_below_buy') {
+          const dist = (safePrimary - candle.close) / Math.abs(safePrimary);
+          entrySignal = candle.close < primaryValue && dist >= stretchPct;
+          side = 'buy';
+        } else if (condition === 'ma_stretch_above_buy') {
+          const dist = (candle.close - safePrimary) / Math.abs(safePrimary);
+          entrySignal = candle.close > primaryValue && dist >= stretchPct;
+          side = 'buy';
+        } else if (condition === 'ma_stretch_above_sell') {
+          const dist = (candle.close - safePrimary) / Math.abs(safePrimary);
+          entrySignal = candle.close > primaryValue && dist >= stretchPct;
+          side = 'sell';
+        } else if (condition === 'ma_stretch_below_sell') {
+          const dist = (safePrimary - candle.close) / Math.abs(safePrimary);
+          entrySignal = candle.close < primaryValue && dist >= stretchPct;
+          side = 'sell';
+        }
+        return { shouldTrade: entrySignal, side };
+      }
+
       // Calcular média móvel anterior para comparação correta de crossover/crossunder
       const previousPrices = klines.slice(0, -1).map(k => k.close);
       let previousIndicatorValue: number | null = null;
