@@ -32,6 +32,7 @@ services:
       PORT: 5000
       DATABASE_URL: ${DATABASE_URL:-postgresql://engbot:engbot_password@db:5432/engbot}
       JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
