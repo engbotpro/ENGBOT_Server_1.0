@@ -267,7 +267,7 @@ export class BotTradeService {
       }
 
       // Verificar saldo antes de criar trade
-      const balanceCheck = await this.hasSufficientBalance(bot, currentPrice);
+      const balanceCheck = await this.hasSufficientBalance(bot, currentPrice, indicators.primary);
       if (!balanceCheck.hasBalance) {
         console.log(`⚠️ Saldo insuficiente para criar trade no robô ${bot.name}. Saldo: ${balanceCheck.balance.toFixed(2)} USDT, Necessário: ${balanceCheck.requiredAmount.toFixed(2)} USDT`);
         
@@ -282,7 +282,7 @@ export class BotTradeService {
       }
 
       // Calcular quantidade baseada no position sizing
-      const quantity = await this.calculatePositionSize(bot, currentPrice);
+      const quantity = await this.calculatePositionSize(bot, currentPrice, indicators.primary);
 
       if (quantity <= 0) {
         console.warn(`⚠️ Quantidade inválida para o robô ${bot.name}`);
@@ -625,36 +625,39 @@ export class BotTradeService {
         }
       }
     } else if (primaryIndicatorName === 'sma' || primaryIndicatorName === 'ema' || primaryIndicatorName === 'wma' || primaryIndicatorName === 'hma') {
-      // Distância mínima % do preço em relação à média (entryValue = percentual, ex.: 1.5 = 1,5%)
-      const stretchPct =
-        bot.entryValue != null && !Number.isNaN(Number(bot.entryValue)) && Number(bot.entryValue) > 0
-          ? Number(bot.entryValue) / 100
-          : 0;
-      const safePrimary = Math.abs(primaryValue) > 1e-12 ? primaryValue : 1e-12;
-
-      const isStretchMa =
-        condition === 'ma_stretch_below_buy' ||
-        condition === 'ma_stretch_above_buy' ||
-        condition === 'ma_stretch_above_sell' ||
-        condition === 'ma_stretch_below_sell';
+      const stretchSettings = this.getEmaDistanceSettings(bot);
+      const stretchConditions = stretchSettings.conditions.filter(stretchCondition =>
+        this.isStretchMaCondition(stretchCondition),
+      );
+      const isStretchMa = stretchConditions.length > 0 || this.isStretchMaCondition(condition);
 
       if (isStretchMa) {
-        if (condition === 'ma_stretch_below_buy') {
-          const dist = (safePrimary - candle.close) / Math.abs(safePrimary);
-          entrySignal = candle.close < primaryValue && dist >= stretchPct;
-          side = 'buy';
-        } else if (condition === 'ma_stretch_above_buy') {
-          const dist = (candle.close - safePrimary) / Math.abs(safePrimary);
-          entrySignal = candle.close > primaryValue && dist >= stretchPct;
-          side = 'buy';
-        } else if (condition === 'ma_stretch_above_sell') {
-          const dist = (candle.close - safePrimary) / Math.abs(safePrimary);
-          entrySignal = candle.close > primaryValue && dist >= stretchPct;
-          side = 'sell';
-        } else if (condition === 'ma_stretch_below_sell') {
-          const dist = (safePrimary - candle.close) / Math.abs(safePrimary);
-          entrySignal = candle.close < primaryValue && dist >= stretchPct;
-          side = 'sell';
+        const conditionsToEvaluate = stretchConditions.length > 0 ? stretchConditions : [condition];
+
+        for (const stretchCondition of conditionsToEvaluate) {
+          const stretchDistance = this.resolveEmaStretchDistance(
+            candle.close,
+            primaryValue,
+            stretchCondition,
+          );
+          const requiredDistance =
+            stretchSettings.mode === 'absolute'
+              ? stretchSettings.threshold
+              : stretchSettings.threshold / 100;
+          const currentDistance =
+            stretchSettings.mode === 'absolute'
+              ? stretchDistance.absoluteDistance
+              : stretchDistance.percentageDistance;
+
+          if (stretchDistance.directionMatches && currentDistance >= requiredDistance) {
+            entrySignal = true;
+            side = stretchCondition.includes('_sell') ? 'sell' : 'buy';
+            break;
+          }
+        }
+
+        if (!entrySignal && conditionsToEvaluate.length > 0) {
+          side = conditionsToEvaluate[0].includes('_sell') ? 'sell' : 'buy';
         }
         return { shouldTrade: entrySignal, side };
       }
@@ -1645,10 +1648,189 @@ export class BotTradeService {
     return days[dayOfWeek] || 'Desconhecido';
   }
 
+  private static getPrimaryIndicatorConfig(bot: any): any | null {
+    if (!bot.indicators || !Array.isArray(bot.indicators) || bot.indicators.length === 0) {
+      return null;
+    }
+
+    return bot.indicators.find((indicator: any) => indicator?.type === 'primary') || null;
+  }
+
+  private static getEmaDistanceSettings(bot: any): {
+    mode: 'percentage' | 'absolute';
+    threshold: number;
+    conditions: string[];
+    scaleLevels: Array<{ distance: number; amount: number }>;
+  } {
+    const primaryIndicator = this.getPrimaryIndicatorConfig(bot);
+    const parameters =
+      primaryIndicator?.parameters && typeof primaryIndicator.parameters === 'object'
+        ? primaryIndicator.parameters
+        : {};
+
+    const threshold =
+      bot.entryValue != null && !Number.isNaN(Number(bot.entryValue)) && Number(bot.entryValue) > 0
+        ? Number(bot.entryValue)
+        : 0;
+
+    const mode =
+      String(parameters.distanceMode || '').toLowerCase() === 'absolute'
+        ? 'absolute'
+        : 'percentage';
+
+    const rawConditions = Array.isArray(parameters.conditions) ? parameters.conditions : [];
+    const conditions = rawConditions
+      .map((value: any) => String(value || '').toLowerCase())
+      .filter((value: string) => this.isStretchMaCondition(value));
+
+    const rawScaleLevels = Array.isArray(parameters.scaleLevels) ? parameters.scaleLevels : [];
+    const scaleLevels = rawScaleLevels
+      .map((level: any) => ({
+        distance: Number(level?.distance),
+        amount: Number(level?.amount),
+      }))
+      .filter(
+        (level: { distance: number; amount: number }) =>
+          Number.isFinite(level.distance) &&
+          level.distance > 0 &&
+          Number.isFinite(level.amount) &&
+          level.amount > 0,
+      )
+      .sort((a: { distance: number }, b: { distance: number }) => a.distance - b.distance);
+
+    if (conditions.length === 0 && this.isStretchMaCondition(String(bot.entryCondition || '').toLowerCase())) {
+      conditions.push(String(bot.entryCondition || '').toLowerCase());
+    }
+
+    return { mode, threshold, conditions, scaleLevels };
+  }
+
+  private static isStretchMaCondition(condition: string): boolean {
+    return (
+      condition === 'ma_stretch_below_buy' ||
+      condition === 'ma_stretch_above_buy' ||
+      condition === 'ma_stretch_above_sell' ||
+      condition === 'ma_stretch_below_sell'
+    );
+  }
+
+  private static resolveEmaStretchDistance(
+    price: number,
+    average: number,
+    condition: string,
+  ): { directionMatches: boolean; absoluteDistance: number; percentageDistance: number } {
+    const safeAverage = Math.abs(average) > 1e-12 ? average : 1e-12;
+
+    if (condition === 'ma_stretch_below_buy' || condition === 'ma_stretch_below_sell') {
+      const directionMatches = price < average;
+      const absoluteDistance = directionMatches ? average - price : 0;
+      return {
+        directionMatches,
+        absoluteDistance,
+        percentageDistance: absoluteDistance / Math.abs(safeAverage),
+      };
+    }
+
+    if (condition === 'ma_stretch_above_buy' || condition === 'ma_stretch_above_sell') {
+      const directionMatches = price > average;
+      const absoluteDistance = directionMatches ? price - average : 0;
+      return {
+        directionMatches,
+        absoluteDistance,
+        percentageDistance: absoluteDistance / Math.abs(safeAverage),
+      };
+    }
+
+    return {
+      directionMatches: false,
+      absoluteDistance: 0,
+      percentageDistance: 0,
+    };
+  }
+
+  private static getAdditionalEmaDistanceAmount(
+    bot: any,
+    currentPrice: number,
+    primaryValue?: number | null,
+  ): number {
+    if (primaryValue == null || !Number.isFinite(Number(primaryValue))) {
+      return 0;
+    }
+
+    const stretchSettings = this.getEmaDistanceSettings(bot);
+    if (!stretchSettings.conditions.length) {
+      return 0;
+    }
+    if (!stretchSettings.scaleLevels.length) {
+      return 0;
+    }
+
+    const matchedCondition = stretchSettings.conditions.find(condition => {
+      const stretchDistance = this.resolveEmaStretchDistance(
+        currentPrice,
+        Number(primaryValue),
+        condition,
+      );
+      return stretchDistance.directionMatches;
+    });
+
+    if (!matchedCondition) {
+      return 0;
+    }
+
+    const stretchDistance = this.resolveEmaStretchDistance(
+      currentPrice,
+      Number(primaryValue),
+      matchedCondition,
+    );
+
+    const currentDistance =
+      stretchSettings.mode === 'absolute'
+        ? stretchDistance.absoluteDistance
+        : stretchDistance.percentageDistance * 100;
+
+    const matchedLevel = [...stretchSettings.scaleLevels]
+      .sort((a, b) => b.distance - a.distance)
+      .find(level => currentDistance >= level.distance);
+
+    return matchedLevel?.amount || 0;
+  }
+
+  private static calculateEntryNotionalAmount(
+    bot: any,
+    balance: number,
+    currentPrice: number,
+    primaryValue?: number | null,
+  ): number {
+    let notionalAmount = 0;
+
+    if (bot.positionSizingType === 'fixed') {
+      notionalAmount = bot.positionSizingValue || 100;
+    } else if (bot.positionSizingType === 'percentage') {
+      const percentage = (bot.positionSizingValue || 10) / 100;
+      notionalAmount = balance * percentage;
+    } else {
+      notionalAmount = 10;
+    }
+
+    notionalAmount += this.getAdditionalEmaDistanceAmount(bot, currentPrice, primaryValue);
+
+    const maxPosition = Number(bot.maxPosition);
+    if (Number.isFinite(maxPosition) && maxPosition > 0) {
+      notionalAmount = Math.min(notionalAmount, maxPosition);
+    }
+
+    return Math.max(0, notionalAmount);
+  }
+
   /**
    * Verifica se há saldo suficiente disponível para operar
    */
-  private static async hasSufficientBalance(bot: any, currentPrice: number): Promise<{ hasBalance: boolean; balance: number; requiredAmount: number }> {
+  private static async hasSufficientBalance(
+    bot: any,
+    currentPrice: number,
+    primaryValue?: number | null,
+  ): Promise<{ hasBalance: boolean; balance: number; requiredAmount: number }> {
     try {
       // Buscar carteira virtual do usuário
       const wallet = await prisma.wallet.findFirst({
@@ -1668,16 +1850,12 @@ export class BotTradeService {
       }
 
       // Calcular valor necessário para uma posição mínima
-      let requiredAmount = 0;
-      if (bot.positionSizingType === 'fixed') {
-        requiredAmount = bot.positionSizingValue || 100;
-      } else if (bot.positionSizingType === 'percentage') {
-        const percentage = (bot.positionSizingValue || 10) / 100;
-        requiredAmount = balance * percentage;
-      } else {
-        // Para outros tipos, usar mínimo de 10 USDT
-        requiredAmount = 10;
-      }
+      const requiredAmount = this.calculateEntryNotionalAmount(
+        bot,
+        balance,
+        currentPrice,
+        primaryValue,
+      );
 
       // Verificar se tem saldo suficiente para uma posição mínima
       if (balance < requiredAmount) {
@@ -1694,12 +1872,14 @@ export class BotTradeService {
   /**
    * Calcula tamanho da posição
    */
-  private static async calculatePositionSize(bot: any, currentPrice: number): Promise<number> {
-    let quantity = 0.001;
+  private static async calculatePositionSize(
+    bot: any,
+    currentPrice: number,
+    primaryValue?: number | null,
+  ): Promise<number> {
+    let balance = 0;
 
-    if (bot.positionSizingType === 'fixed') {
-      quantity = (bot.positionSizingValue || 100) / currentPrice;
-    } else if (bot.positionSizingType === 'percentage') {
+    if (bot.positionSizingType === 'percentage') {
       const wallet = await prisma.wallet.findFirst({
         where: {
           userId: bot.userId,
@@ -1707,15 +1887,17 @@ export class BotTradeService {
           symbol: 'USDT'
         }
       });
-      const balance = wallet?.balance || 0;
-      const percentage = (bot.positionSizingValue || 10) / 100;
-      quantity = (balance * percentage) / currentPrice;
+      balance = wallet?.balance || 0;
     }
 
-    if (bot.maxPosition && quantity > bot.maxPosition) {
-      quantity = bot.maxPosition;
-    }
+    const notionalAmount = this.calculateEntryNotionalAmount(
+      bot,
+      balance,
+      currentPrice,
+      primaryValue,
+    );
 
+    const quantity = notionalAmount / currentPrice;
     return Math.max(0.000001, quantity); // Mínimo de 0.000001
   }
 
