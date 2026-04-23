@@ -207,7 +207,8 @@ export class BotTradeService {
         previousCandle,
         klines,
         indicators,
-        bot
+        bot,
+        currentPrice
       );
 
       // Log detalhado para debug
@@ -497,12 +498,14 @@ export class BotTradeService {
     previousCandle: Candle,
     klines: Candle[],
     indicators: any,
-    bot: any
+    bot: any,
+    executionPrice?: number
   ): { shouldTrade: boolean; side: 'buy' | 'sell' } {
     const condition = (bot.entryCondition || '').toLowerCase();
     const primaryValue = indicators.primary;
     const secondaryValue = indicators.secondary;
     const confirmationValue = indicators.confirmation;
+    const evaluatedPrice = executionPrice ?? candle.close;
 
     // Se não há condição configurada, usar lógica padrão baseada no indicador
     if (!condition || condition === '') {
@@ -636,7 +639,7 @@ export class BotTradeService {
 
         for (const stretchCondition of conditionsToEvaluate) {
           const stretchDistance = this.resolveEmaStretchDistance(
-            candle.close,
+            evaluatedPrice,
             primaryValue,
             stretchCondition,
           );
@@ -681,38 +684,38 @@ export class BotTradeService {
         if (condition.includes('acima') || condition.includes('above')) {
           // Crossover acima: preço estava abaixo da média e agora está acima
           if (previousIndicatorValue !== null) {
-            entrySignal = previousCandle.close <= previousIndicatorValue && candle.close > primaryValue;
+            entrySignal = previousCandle.close <= previousIndicatorValue && evaluatedPrice > primaryValue;
           } else {
-            entrySignal = previousCandle.close <= primaryValue && candle.close > primaryValue;
+            entrySignal = previousCandle.close <= primaryValue && evaluatedPrice > primaryValue;
           }
           side = 'buy';
         } else if (condition.includes('abaixo') || condition.includes('below')) {
           // Crossover abaixo: preço estava acima da média e agora está abaixo
           if (previousIndicatorValue !== null) {
-            entrySignal = previousCandle.close >= previousIndicatorValue && candle.close < primaryValue;
+            entrySignal = previousCandle.close >= previousIndicatorValue && evaluatedPrice < primaryValue;
           } else {
-            entrySignal = previousCandle.close >= primaryValue && candle.close < primaryValue;
+            entrySignal = previousCandle.close >= primaryValue && evaluatedPrice < primaryValue;
           }
           side = 'sell';
         } else {
           // Se apenas "crossover" sem especificar direção, detectar automaticamente
           if (previousIndicatorValue !== null) {
             // Crossover acima (compra)
-            if (previousCandle.close <= previousIndicatorValue && candle.close > primaryValue) {
+            if (previousCandle.close <= previousIndicatorValue && evaluatedPrice > primaryValue) {
               entrySignal = true;
               side = 'buy';
             }
             // Crossover abaixo (venda)
-            else if (previousCandle.close >= previousIndicatorValue && candle.close < primaryValue) {
+            else if (previousCandle.close >= previousIndicatorValue && evaluatedPrice < primaryValue) {
               entrySignal = true;
               side = 'sell';
             }
           } else {
             // Fallback: detectar qualquer crossover
-            if (previousCandle.close <= primaryValue && candle.close > primaryValue) {
+            if (previousCandle.close <= primaryValue && evaluatedPrice > primaryValue) {
               entrySignal = true;
               side = 'buy';
-            } else if (previousCandle.close >= primaryValue && candle.close < primaryValue) {
+            } else if (previousCandle.close >= primaryValue && evaluatedPrice < primaryValue) {
               entrySignal = true;
               side = 'sell';
             }
@@ -723,36 +726,36 @@ export class BotTradeService {
       else if (condition.includes('crossunder') || condition.includes('cruzou abaixo')) {
         if (previousIndicatorValue !== null) {
           // Crossunder: preço estava acima da média e agora está abaixo
-          entrySignal = previousCandle.close >= previousIndicatorValue && candle.close < primaryValue;
+          entrySignal = previousCandle.close >= previousIndicatorValue && evaluatedPrice < primaryValue;
         } else {
-          entrySignal = previousCandle.close >= primaryValue && candle.close < primaryValue;
+          entrySignal = previousCandle.close >= primaryValue && evaluatedPrice < primaryValue;
         }
         side = 'sell';
       }
       // ABOVE: preço está acima da média (compra)
       else if (condition.includes('acima') || condition.includes('above')) {
-        entrySignal = candle.close > primaryValue;
+        entrySignal = evaluatedPrice > primaryValue;
         side = 'buy';
       }
       // BELOW: preço está abaixo da média (venda)
       else if (condition.includes('abaixo') || condition.includes('below')) {
-        entrySignal = candle.close < primaryValue;
+        entrySignal = evaluatedPrice < primaryValue;
         side = 'sell';
       }
       // BREAKOUT: preço rompe acima da média com força (compra)
       else if (condition.includes('breakout')) {
         // Breakout: preço fecha acima da média e o candle tem alta significativa
         const candleRange = candle.high - candle.low;
-        const priceMove = candle.close - candle.open;
-        entrySignal = candle.close > primaryValue && priceMove > (candleRange * 0.6); // Pelo menos 60% do range do candle
+        const priceMove = evaluatedPrice - candle.open;
+        entrySignal = evaluatedPrice > primaryValue && priceMove > (candleRange * 0.6); // Pelo menos 60% do range do candle
         side = 'buy';
       }
       // BREAKDOWN: preço rompe abaixo da média com força (venda)
       else if (condition.includes('breakdown')) {
         // Breakdown: preço fecha abaixo da média e o candle tem queda significativa
         const candleRange = candle.high - candle.low;
-        const priceMove = candle.open - candle.close;
-        entrySignal = candle.close < primaryValue && priceMove > (candleRange * 0.6); // Pelo menos 60% do range do candle
+        const priceMove = candle.open - evaluatedPrice;
+        entrySignal = evaluatedPrice < primaryValue && priceMove > (candleRange * 0.6); // Pelo menos 60% do range do candle
         side = 'sell';
       }
     } else if (primaryIndicatorName.includes('bollinger')) {

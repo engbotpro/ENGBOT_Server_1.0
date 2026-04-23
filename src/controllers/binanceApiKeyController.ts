@@ -6,7 +6,10 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { encrypt, decrypt } from '../services/encryptionService';
-import { fetchBinanceAccountWithValues } from '../services/binanceAccountService';
+import {
+  BinanceRequestError,
+  fetchBinanceAccountWithValues,
+} from '../services/binanceAccountService';
 
 const prisma = new PrismaClient();
 
@@ -123,13 +126,6 @@ export const getBinanceAccount = async (req: Request, res: Response) => {
 
     const result = await fetchBinanceAccountWithValues(apiKey, apiSecret);
 
-    if (!result) {
-      return res.status(400).json({
-        success: false,
-        message: 'Erro ao conectar com a Binance. Verifique se as chaves estão corretas e têm permissão de leitura.',
-      });
-    }
-
     res.status(200).json({
       success: true,
       data: {
@@ -139,6 +135,13 @@ export const getBinanceAccount = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Erro ao buscar conta Binance:', error);
+    if (error instanceof BinanceRequestError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+        binanceCode: error.binanceCode,
+      });
+    }
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Erro ao buscar conta Binance',
