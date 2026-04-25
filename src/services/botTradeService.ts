@@ -169,7 +169,7 @@ export class BotTradeService {
       const symbol = bot.symbol || 'BTCUSDT';
       
       // Buscar dados históricos suficientes para calcular indicadores
-      const lookbackPeriod = this.getLookbackPeriod(bot.primaryIndicator);
+      const lookbackPeriod = this.getLookbackPeriodForBot(bot);
       const klines = await fetchHistoricalKlines(symbol, timeframe, lookbackPeriod);
       
       if (!klines || klines.length < 2) {
@@ -341,7 +341,8 @@ export class BotTradeService {
       const timeframe = bot.timeframe || '1h';
       const symbol = bot.symbol || 'BTCUSDT';
       
-      const klines = await fetchHistoricalKlines(symbol, timeframe, 100);
+      const lookbackPeriod = this.getLookbackPeriodForBot(bot);
+      const klines = await fetchHistoricalKlines(symbol, timeframe, lookbackPeriod);
       if (!klines || klines.length < 2) return;
 
       const latestCandle = klines[klines.length - 1];
@@ -1573,6 +1574,48 @@ export class BotTradeService {
     }
     
     return 100; // Padrão
+  }
+
+  /**
+   * Calcula um lookback suficiente para o bot inteiro.
+   * Para EMAs/médias longas precisamos de folga extra, senão o valor atual
+   * pode existir mas o valor "anterior" ainda fica subamostrado e o
+   * cruzamento/distância não dispara corretamente.
+   */
+  private static getLookbackPeriodForBot(bot: any): number {
+    const fallbackLookback = this.getLookbackPeriod(bot.primaryIndicator || '');
+    const configuredPeriods: number[] = [];
+
+    if (Array.isArray(bot.indicators)) {
+      for (const indicator of bot.indicators) {
+        const indicatorName = String(indicator?.name || '').toLowerCase();
+        const configuredPeriod = Number(indicator?.parameters?.period);
+
+        if (Number.isFinite(configuredPeriod) && configuredPeriod > 0) {
+          configuredPeriods.push(Math.ceil(configuredPeriod));
+        }
+
+        configuredPeriods.push(this.getLookbackPeriod(indicatorName));
+      }
+    }
+
+    const legacyPrimaryPeriod = Number(bot.primaryPeriod);
+    if (Number.isFinite(legacyPrimaryPeriod) && legacyPrimaryPeriod > 0) {
+      configuredPeriods.push(Math.ceil(legacyPrimaryPeriod));
+    }
+
+    const maxConfiguredPeriod = configuredPeriods.length > 0
+      ? Math.max(...configuredPeriods)
+      : fallbackLookback;
+
+    const warmupLookback = Math.max(
+      fallbackLookback,
+      maxConfiguredPeriod + 2,
+      maxConfiguredPeriod * 3,
+      100,
+    );
+
+    return Math.min(1000, Math.ceil(warmupLookback));
   }
 
   /**
