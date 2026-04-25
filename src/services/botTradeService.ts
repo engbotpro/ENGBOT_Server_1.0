@@ -177,11 +177,17 @@ export class BotTradeService {
         return;
       }
 
-      const latestCandle = klines[klines.length - 1];
-      const previousCandle = klines[klines.length - 2];
-      
       // Determinar preço de execução baseado no modo de execução
       const entryExecutionMode = bot.entryExecutionMode || 'candle_close';
+      const analysisKlines = this.getAnalysisKlinesForExecution(klines, timeframe, entryExecutionMode);
+
+      if (!analysisKlines || analysisKlines.length < 2) {
+        console.warn(`⚠️ Dados insuficientes de candle fechado para ${symbol} no timeframe ${timeframe}`);
+        return;
+      }
+
+      const latestCandle = analysisKlines[analysisKlines.length - 1];
+      const previousCandle = analysisKlines[analysisKlines.length - 2];
       let currentPrice: number;
       
       if (entryExecutionMode === 'price_condition') {
@@ -199,13 +205,13 @@ export class BotTradeService {
       }
 
       // Calcular indicadores
-      const indicators = this.calculateIndicators(klines, bot);
+      const indicators = this.calculateIndicators(analysisKlines, bot);
 
       // Verificar condição de entrada
       const entrySignal = this.checkEntrySignal(
         latestCandle,
         previousCandle,
-        klines,
+        analysisKlines,
         indicators,
         bot,
         currentPrice
@@ -238,7 +244,7 @@ export class BotTradeService {
       if ((bot.entryCondition || '').toLowerCase().includes('crossover')) {
         const primaryIndicatorName = (bot.primaryIndicator || '').toLowerCase();
         if (primaryIndicatorName === 'sma' || primaryIndicatorName === 'ema') {
-          const previousPrices = klines.slice(0, -1).map(k => k.close);
+          const previousPrices = analysisKlines.slice(0, -1).map(k => k.close);
           let previousIndicatorValue: number | null = null;
           if (primaryIndicatorName === 'sma') {
             previousIndicatorValue = this.calculateSMA(previousPrices, 20);
@@ -1576,6 +1582,27 @@ export class BotTradeService {
     return 100; // Padrão
   }
 
+  private static getAnalysisKlinesForExecution(
+    klines: Candle[],
+    timeframe: string,
+    executionMode?: string,
+  ): Candle[] {
+    const normalizedExecutionMode = String(executionMode || 'candle_close').toLowerCase();
+
+    if (normalizedExecutionMode !== 'candle_close' || klines.length < 2) {
+      return klines;
+    }
+
+    const lastCandle = klines[klines.length - 1];
+    const timeframeMs = this.getTimeframeMilliseconds(timeframe);
+
+    if (Date.now() < lastCandle.time + timeframeMs) {
+      return klines.slice(0, -1);
+    }
+
+    return klines;
+  }
+
   /**
    * Calcula um lookback suficiente para o bot inteiro.
    * Para EMAs/médias longas precisamos de folga extra, senão o valor atual
@@ -1624,14 +1651,23 @@ export class BotTradeService {
   private static getTimeframeMinutes(timeframe: string): number {
     const mapping: Record<string, number> = {
       '1m': 1,
+      '3m': 3,
       '5m': 5,
       '15m': 15,
       '30m': 30,
       '1h': 60,
+      '2h': 120,
       '4h': 240,
-      '1d': 1440
+      '6h': 360,
+      '12h': 720,
+      '1d': 1440,
+      '1w': 10080,
     };
     return mapping[timeframe] || 60;
+  }
+
+  private static getTimeframeMilliseconds(timeframe: string): number {
+    return this.getTimeframeMinutes(timeframe) * 60 * 1000;
   }
 
   /**
