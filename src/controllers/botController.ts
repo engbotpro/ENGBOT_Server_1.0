@@ -696,3 +696,79 @@ export const closeAllBotTrades = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 };
+
+// Fechar uma posição aberta específica de um bot
+export const closeBotTrade = async (req: Request, res: Response) => {
+  try {
+    const { id, tradeId } = req.params;
+    const userId = getUserId(req);
+
+    if (!userId) {
+      res.status(401).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const bot = await prisma.bot.findFirst({
+      where: { id, userId }
+    });
+
+    if (!bot) {
+      res.status(404).json({ error: 'Bot não encontrado' });
+      return;
+    }
+
+    const trade = await prisma.trade.findFirst({
+      where: {
+        id: tradeId,
+        botId: id,
+        userId,
+        status: 'open'
+      }
+    });
+
+    if (!trade) {
+      res.status(404).json({ error: 'Trade aberto não encontrado' });
+      return;
+    }
+
+    const { fetchHistoricalKlines } = await import('../services/binanceService');
+    const klines = await fetchHistoricalKlines(bot.symbol, bot.timeframe || '1h', 1);
+    const currentPrice = klines && klines.length > 0 ? klines[klines.length - 1].close : null;
+
+    if (!currentPrice) {
+      res.status(500).json({ error: 'Não foi possível obter o preço atual do símbolo' });
+      return;
+    }
+
+    const pnl = trade.side === 'buy'
+      ? (currentPrice - trade.price) * trade.quantity
+      : (trade.price - currentPrice) * trade.quantity;
+    const pnlPercent = ((currentPrice - trade.price) / trade.price) * 100 * (trade.side === 'buy' ? 1 : -1);
+
+    await prisma.trade.update({
+      where: { id: trade.id },
+      data: {
+        status: 'closed',
+        exitTime: new Date(),
+        exitPrice: currentPrice,
+        pnl,
+        pnlPercent
+      }
+    });
+
+    const { BotTradeService } = await import('../services/botTradeService');
+    await BotTradeService.updateVirtualWalletWithPnL(bot.userId, pnl);
+    await BotTradeService.updateBotStatistics(bot.id);
+
+    res.json({
+      success: true,
+      message: 'Posição encerrada com sucesso',
+      closedCount: 1,
+      totalPnL: pnl,
+      exitPrice: currentPrice
+    });
+  } catch (error) {
+    console.error('Erro ao fechar posição do bot:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+};

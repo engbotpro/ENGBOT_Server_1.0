@@ -14,6 +14,7 @@ import {
   getBotsByUserId,
   getBotByIdPublic,
   getBotOpenTrades,
+  closeBotTrade,
   closeAllBotTrades
 } from '../controllers/botController';
 
@@ -40,6 +41,7 @@ router.delete('/:id', deleteBot);
 router.patch('/:id/toggle', toggleBotActive);
 router.patch('/:id/performance', updateBotPerformance);
 router.get('/:id/trades/open', getBotOpenTrades);
+router.post('/:id/trades/:tradeId/close', closeBotTrade);
 router.post('/:id/trades/close-all', closeAllBotTrades);
 
 export default router;

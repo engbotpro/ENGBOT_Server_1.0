@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../prismaClient';
-import { fetchCurrentPrice } from '../services/binanceService';
+import { fetchCurrentPrice, fetchUsdtBrlRate } from '../services/binanceService';
 
 /**
  * Lista todos os investimentos do usuário (Capital Total).
@@ -60,7 +60,12 @@ async function getCurrentValue(inv: {
   if (inv.type === 'crypto' && inv.quantity != null && inv.quantity > 0 && inv.symbol) {
     const symbol = inv.symbol.toUpperCase().endsWith('USDT') ? inv.symbol.toUpperCase() : `${inv.symbol.toUpperCase()}USDT`;
     const price = await fetchCurrentPrice(symbol);
-    if (price != null && price > 0) return inv.quantity * price;
+    if (price != null && price > 0) {
+      const usdtBrlRate = await fetchUsdtBrlRate();
+      if (usdtBrlRate != null && usdtBrlRate > 0) {
+        return inv.quantity * price * usdtBrlRate;
+      }
+    }
     return null;
   }
   if (inv.type === 'fixed_income' && inv.interestRate != null) {

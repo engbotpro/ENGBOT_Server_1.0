@@ -123,4 +123,31 @@ export async function fetchCurrentPrice(symbol: string): Promise<number | null> 
   }
 }
 
+/**
+ * Busca a cotação aproximada de 1 USDT/USD em BRL.
+ */
+export async function fetchUsdtBrlRate(): Promise<number | null> {
+  const usdtBrlPrice = await fetchCurrentPrice('USDTBRL');
+
+  if (usdtBrlPrice != null && usdtBrlPrice > 0) {
+    return usdtBrlPrice;
+  }
+
+  try {
+    const response = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL');
+
+    if (!response.ok) {
+      console.warn(`Fallback USD-BRL retornou HTTP ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json() as { USDBRL?: { bid?: string } };
+    const bid = Number(data.USDBRL?.bid);
+    return Number.isFinite(bid) && bid > 0 ? bid : null;
+  } catch (error) {
+    console.error('Erro ao buscar cotação USD/BRL:', error);
+    return null;
+  }
+}
+
 
