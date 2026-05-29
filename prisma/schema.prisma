@@ -31,6 +31,15 @@ model User {
   termsAccepted       Boolean  @default(false)    // Se o usuário aceitou os termos
   termsAcceptedAt     DateTime?                   // Data de aceite dos termos
 
+  // Programa de indicação
+  referralCode        String?  @unique
+  referredByUserId    String?
+  referralCount       Int      @default(0)
+  referralPromptSeen  Boolean  @default(false)
+  isReferralPremium   Boolean  @default(false)
+  referredBy          User?    @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referredUsers       User[]   @relation("UserReferrals")
+
   // Campos relacionados ao plano
   currentPlan         String?             // Nome do plano atual
   billingCycle        String?             // 'mensal' | 'anual'

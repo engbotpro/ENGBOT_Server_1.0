@@ -4,6 +4,7 @@ import prisma from "../prismaClient";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendConfirmationEmail } from "../services/emailSender";
+import { generateUniqueReferralCode, getReferralInfo as fetchReferralInfo, applyReferralCode as applyReferral, dismissReferralPrompt as dismissReferral, ReferralError } from "../services/referralService";
 
 // 🔹 Criar usuário
 export const createUser = async (req: Request, res: Response) => {
@@ -37,6 +38,9 @@ export const createUser = async (req: Request, res: Response) => {
         userData.planExpiresAt = new Date(userData.planActivatedAt.getTime() + 30 * 24 * 60 * 60 * 1000); // 1 mês
       }
     }
+
+    const referralCode = await generateUniqueReferralCode();
+    userData.referralCode = referralCode;
 
     const user = await prisma.user.create({
       data: userData,
@@ -118,6 +122,7 @@ export const register = async (
 
     // 1) Cria usuário não confirmado
     const hashedPassword = await bcrypt.hash(password, 10);
+    const referralCode = await generateUniqueReferralCode();
     const user = await prisma.user.create({
       data: {
         email,
@@ -127,6 +132,7 @@ export const register = async (
         active: true,
         primeiroAcesso: true,
         confirmed: false,
+        referralCode,
       },
     });
 
@@ -598,5 +604,67 @@ export const checkTermsAccepted = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[checkTermsAccepted] Erro ao verificar termos:', error);
     res.status(500).json({ error: 'Erro ao verificar termos' });
+  }
+};
+
+export const getReferralInfo = async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const info = await fetchReferralInfo(userId);
+    res.json(info);
+  } catch (error) {
+    if (error instanceof ReferralError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error('[getReferralInfo] Erro:', error);
+    res.status(500).json({ error: 'Erro ao buscar indicações' });
+  }
+};
+
+export const applyReferralCodeHandler = async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const { code } = req.body || {};
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Código de indicação é obrigatório.' });
+    }
+
+    const result = await applyReferral(userId, code);
+    const info = await fetchReferralInfo(userId);
+
+    res.json({
+      message: 'Código de indicação aplicado com sucesso.',
+      result,
+      ...info,
+    });
+  } catch (error) {
+    if (error instanceof ReferralError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error('[applyReferralCode] Erro:', error);
+    res.status(500).json({ error: 'Erro ao aplicar código' });
+  }
+};
+
+export const dismissReferralPromptHandler = async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    await dismissReferral(userId);
+    res.json({ message: 'Prompt de indicação dispensado.', referralPromptSeen: true });
+  } catch (error) {
+    console.error('[dismissReferralPrompt] Erro:', error);
+    res.status(500).json({ error: 'Erro ao dispensar prompt de indicação' });
   }
 };

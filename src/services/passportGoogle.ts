@@ -3,6 +3,7 @@ import passport from "passport";
 import { Strategy as GoogleStrategy, Profile } from "passport-google-oauth20";
 import prisma from "../prismaClient";
 import jwt from "jsonwebtoken";
+import { generateUniqueReferralCode } from "./referralService";
 
 // Só configura o Google OAuth se as credenciais estiverem definidas
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -51,6 +52,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             });
           }
         } else {
+          const referralCode = await generateUniqueReferralCode();
           // Se não encontrou por googleId, tenta buscar/atualizar por email
           user = await prisma.user.upsert({
             where: { email },
@@ -64,8 +66,17 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
               name: profile.displayName,
               googleId: profile.id,
               active: true,
-              perfil: "usuario"
+              perfil: "usuario",
+              referralCode,
             },
+          });
+        }
+
+        if (!user.referralCode) {
+          const referralCode = await generateUniqueReferralCode();
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { referralCode },
           });
         }
 

@@ -108,18 +108,38 @@ export async function fetchBinanceAccount(
   }
 }
 
-/** Preço em USDT para conversão */
-async function getPriceUsdt(symbol: string): Promise<number> {
-  if (symbol === 'USDT' || symbol === 'BUSD') return 1;
+const STABLECOINS_USD = new Set(['USDT', 'BUSD', 'USDC', 'FDUSD', 'TUSD']);
+
+/** Busca todos os preços USDT em uma única chamada pública */
+async function fetchAllUsdtPrices(): Promise<Map<string, number>> {
   try {
-    const url = `${BINANCE_BASE_URL}/api/v3/ticker/price?symbol=${symbol}USDT`;
+    const url = `${BINANCE_BASE_URL}/api/v3/ticker/price`;
     const res = await fetch(url);
-    if (!res.ok) return 0;
-    const data = await res.json();
-    return parseFloat(data.price || 0);
-  } catch {
-    return 0;
+    if (!res.ok) {
+      console.error('[Binance] Erro ao buscar preços em lote:', res.status);
+      return new Map();
+    }
+
+    const data = (await res.json()) as Array<{ symbol: string; price: string }>;
+    const priceMap = new Map<string, number>();
+
+    for (const item of data) {
+      if (item.symbol.endsWith('USDT')) {
+        const asset = item.symbol.slice(0, -4);
+        priceMap.set(asset, parseFloat(item.price || '0'));
+      }
+    }
+
+    return priceMap;
+  } catch (error) {
+    console.error('[Binance] Erro ao buscar preços em lote:', error);
+    return new Map();
   }
+}
+
+function getPriceUsdtFromMap(asset: string, priceMap: Map<string, number>): number {
+  if (STABLECOINS_USD.has(asset)) return 1;
+  return priceMap.get(asset) ?? 0;
 }
 
 export interface WalletAssetFromBinance {
@@ -136,7 +156,10 @@ export async function fetchBinanceAccountWithValues(
   apiKey: string,
   apiSecret: string
 ): Promise<{ assets: WalletAssetFromBinance[]; totalValue: number }> {
-  const account = await fetchBinanceAccount(apiKey, apiSecret);
+  const [account, priceMap] = await Promise.all([
+    fetchBinanceAccount(apiKey, apiSecret),
+    fetchAllUsdtPrices(),
+  ]);
 
   const assets: WalletAssetFromBinance[] = [];
   for (const b of account.balances) {
@@ -145,7 +168,7 @@ export async function fetchBinanceAccountWithValues(
     const total = free + locked;
     if (total <= 0) continue;
 
-    const priceUsdt = await getPriceUsdt(b.asset);
+    const priceUsdt = getPriceUsdtFromMap(b.asset, priceMap);
     const value = total * priceUsdt;
 
     assets.push({
